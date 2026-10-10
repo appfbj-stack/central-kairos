@@ -39,6 +39,17 @@ export default function InstallationDetail() {
       .catch((e) => setError(e.message));
   }
 
+  async function loadAsync(): Promise<void> {
+    if (!id) return;
+    try {
+      const d = await api.getInstallation(id);
+      setInstallation(d.installation);
+      setForm(d.installation);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
   useEffect(load, [id]);
 
   if (error) return <div className="p-4 md:p-8 text-red-700">{error}</div>;
@@ -95,14 +106,16 @@ export default function InstallationDetail() {
   }
 
   async function handleChangePlan(plan: Plan) {
-    const periodStr = prompt(`Quantos dias o plano ${plan} deve vigorar? (padrão 30)`, "30");
-    const period = periodStr ? parseInt(periodStr, 10) : 30;
+    const period = 30;
     if (!confirm(`Mudar para ${plan} (${PLAN_LIMITS[plan]} msgs) por ${period} dias?\nO contador de uso será ZERADO.`)) return;
     try {
+      setSaving(true);
       await api.changePlan(installation.id, plan, period);
-      load();
+      await loadAsync();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
