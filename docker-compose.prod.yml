@@ -1,0 +1,28 @@
+# central-kairos prod compose — VPS 187.77.229.227
+# 1 container que serve API + frontend estático (porta 3000)
+# Conecta no kairos-shared-pg via rede dokploy-network
+# Healthcheck: /api/health
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: central-kairos-app
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    ports:
+      - "127.0.0.1:4001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres123@kairos-shared-pg:5432/central_kairos?schema=public
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@central-kairos.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Troque@Senha123}
+      - ADMIN_NAME=${ADMIN_NAME:-Fernando Borges}
+
+networks:
+  dokploy-network:
+    external: true
