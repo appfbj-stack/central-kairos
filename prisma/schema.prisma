@@ -1,0 +1,116 @@
+// Central Kairos — Prisma Schema
+// Banco: PostgreSQL (kairos-shared-pg do Dokploy)
+// Cria o banco `central_kairos_db` na primeira migração.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum InstallationStatus {
+  TRIAL
+  ACTIVE
+  BLOCKED
+  EXPIRED
+  ARCHIVED
+}
+
+// Planos comerciais (Sprint v0.2.0+)
+// FREE: 15 msgs/mês (trial)
+// BASIC: 100 msgs/mês
+// PRO: 200 msgs/mês
+// ULTRA: 300 msgs/mês
+// ENTERPRISE: ilimitado
+enum Plan {
+  FREE
+  BASIC
+  PRO
+  ULTRA
+  ENTERPRISE
+}
+
+// ============================================================
+// ADMIN USER (você — único super admin da Central)
+// ============================================================
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  lastLoginAt  DateTime?
+
+  sessions AdminSession[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================
+// INSTALLATION (cada app vendido/instalado)
+// ============================================================
+
+model Installation {
+  id            String             @id // "APP-0001" (gerado via max(id)+1)
+  productName   String             // "Kairos Igreja"
+  clientName    String             // "Igreja OBPC"
+  companyName   String?            // "OBPC Sede"
+  appUrl        String             // "https://igrejak.fbautomacao.space"
+  dbIdentifier  String?            // referência ao banco dela (ex: "kairos_igreja_db_v2")
+  status        InstallationStatus @default(TRIAL)
+  trialStartAt  DateTime?
+  trialEndsAt   DateTime?
+  registeredAt  DateTime           @default(now())
+  notes         String?
+
+  // Licenciamento (Sprint v0.2.0+)
+  plan             Plan       @default(FREE) // plano atual do cliente
+  usageLimit       Int        @default(15)  // limite de mensagens no período
+  usageUsed        Int        @default(0)   // mensagens já consumidas no período
+  currentPeriodEnd DateTime?               // quando reseta (mensal)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  history InstallationStatusHistory[]
+
+  @@index([status])
+  @@index([productName])
+  @@index([plan])
+}
+
+// ============================================================
+// STATUS HISTORY (audit log de mudanças de status)
+// ============================================================
+
+model InstallationStatusHistory {
+  id             String              @id @default(cuid())
+  installationId String
+  fromStatus     InstallationStatus?
+  toStatus       InstallationStatus
+  reason         String?
+  changedBy      String              // admin user id (texto, não FK rígida)
+
+  createdAt DateTime @default(now())
+
+  installation Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([installationId])
+}
