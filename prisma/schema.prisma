@@ -84,6 +84,9 @@ model Installation {
   plan             Plan       @default(FREE) // plano atual do cliente
   usageLimit       Int        @default(15)  // limite de mensagens no período
   usageUsed        Int        @default(0)   // mensagens já consumidas no período
+  // Token control (Sprint v0.4.0+) — limita custo real por mês
+  tokensLimit      Int        @default(50000)   // limite de tokens no período (50k default FREE)
+  tokensUsed       Int        @default(0)       // tokens já consumidos no período
   currentPeriodEnd DateTime?               // quando reseta (mensal)
 
   createdAt DateTime @default(now())

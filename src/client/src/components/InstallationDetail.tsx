@@ -220,7 +220,7 @@ export default function InstallationDetail() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div className="rounded-lg border bg-white p-3">
                 <p className="text-xs text-gray-500">Mensagens usadas</p>
                 <p className="text-2xl font-bold text-gray-800">
@@ -237,6 +237,25 @@ export default function InstallationDetail() {
                           : "bg-emerald-500"
                     }`}
                     style={{ width: `${Math.min(100, (installation.usageUsed / Math.max(1, installation.usageLimit)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-gray-500">Tokens usados</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {installation.tokensUsed >= 1000 ? `${(installation.tokensUsed / 1000).toFixed(1)}k` : installation.tokensUsed}
+                  <span className="text-sm text-gray-400"> / {installation.tokensLimit >= 999999 ? "∞" : installation.tokensLimit >= 1000 ? `${(installation.tokensLimit / 1000).toFixed(0)}k` : installation.tokensLimit}</span>
+                </p>
+                <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      installation.tokensUsed / Math.max(1, installation.tokensLimit) > 0.8
+                        ? "bg-red-500"
+                        : installation.tokensUsed / Math.max(1, installation.tokensLimit) > 0.5
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${Math.min(100, (installation.tokensUsed / Math.max(1, installation.tokensLimit)) * 100)}%` }}
                   />
                 </div>
               </div>

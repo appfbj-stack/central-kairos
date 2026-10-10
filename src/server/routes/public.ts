@@ -18,7 +18,7 @@ const router = Router();
 router.get("/installation/:id/status", async (req: Request, res: Response) => {
   const installation = await prisma.installation.findUnique({
     where: { id: req.params.id },
-    select: { id: true, status: true, plan: true, usageLimit: true, usageUsed: true, currentPeriodEnd: true },
+    select: { id: true, status: true, plan: true, usageLimit: true, usageUsed: true, tokensLimit: true, tokensUsed: true, currentPeriodEnd: true },
   });
   if (!installation) {
     return res.status(404).json({
@@ -35,6 +35,9 @@ router.get("/installation/:id/status", async (req: Request, res: Response) => {
     usageLimit: installation.usageLimit,
     usageUsed: installation.usageUsed,
     remaining: Math.max(0, installation.usageLimit - installation.usageUsed),
+    tokensLimit: installation.tokensLimit,
+    tokensUsed: installation.tokensUsed,
+    tokensRemaining: Math.max(0, installation.tokensLimit - installation.tokensUsed),
     currentPeriodEnd: installation.currentPeriodEnd,
   });
 });
@@ -42,6 +45,8 @@ router.get("/installation/:id/status", async (req: Request, res: Response) => {
 const CheckUsageSchema = z.object({
   /** Opcional — se vier, verifica que bate com a instalação cadastrada. */
   installationSecret: z.string().optional(),
+  /** Quantos tokens foram consumidos nessa mensagem (input+output). Default 0. */
+  tokensToAdd: z.number().int().nonnegative().max(1000000).optional(),
 });
 
 // POST: checa + incrementa contador. Retorna se pode rodar.
@@ -67,14 +72,20 @@ router.post("/installation/:id/check-usage", async (req: Request, res: Response)
     installation.currentPeriodEnd !== null &&
     installation.currentPeriodEnd < now;
   const usedOverLimit = installation.usageUsed >= installation.usageLimit;
+  const usedOverTokens = installation.tokensUsed >= installation.tokensLimit;
   const statusBlocked = installation.status === "BLOCKED" || installation.status === "EXPIRED";
-  const allowed = !statusBlocked && !usedOverLimit && !periodExpired;
+  const allowed = !statusBlocked && !usedOverLimit && !usedOverTokens && !periodExpired;
+
+  const tokensToAdd = parsed.data.tokensToAdd || 0;
 
   if (allowed) {
-    // Incrementa o contador
+    // Incrementa os contadores
     await prisma.installation.update({
       where: { id: installation.id },
-      data: { usageUsed: { increment: 1 } },
+      data: {
+        usageUsed: { increment: 1 },
+        tokensUsed: { increment: tokensToAdd },
+      },
     });
   }
 
@@ -85,14 +96,19 @@ router.post("/installation/:id/check-usage", async (req: Request, res: Response)
     usageLimit: installation.usageLimit,
     usageUsed: allowed ? installation.usageUsed + 1 : installation.usageUsed,
     remaining: Math.max(0, installation.usageLimit - (allowed ? installation.usageUsed + 1 : installation.usageUsed)),
+    tokensLimit: installation.tokensLimit,
+    tokensUsed: allowed ? installation.tokensUsed + tokensToAdd : installation.tokensUsed,
+    tokensRemaining: Math.max(0, installation.tokensLimit - (allowed ? installation.tokensUsed + tokensToAdd : installation.tokensUsed)),
     blocked: !allowed,
     reason: statusBlocked
       ? `Status: ${installation.status}`
       : periodExpired
         ? "Período mensal expirou"
-        : usedOverLimit
-          ? `Limite do plano ${installation.plan} atingido`
-          : null,
+        : usedOverTokens
+          ? `Limite de tokens do plano ${installation.plan} atingido (${installation.tokensUsed}/${installation.tokensLimit})`
+          : usedOverLimit
+            ? `Limite de mensagens do plano ${installation.plan} atingido`
+            : null,
     currentPeriodEnd: installation.currentPeriodEnd,
     renewUrl: "https://central.fbautomacao.space",
   });

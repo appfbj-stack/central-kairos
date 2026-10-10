@@ -30,6 +30,8 @@ export interface Installation {
   plan: Plan;
   usageLimit: number;
   usageUsed: number;
+  tokensLimit: number;
+  tokensUsed: number;
   currentPeriodEnd: string | null;
   createdAt: string;
   updatedAt: string;

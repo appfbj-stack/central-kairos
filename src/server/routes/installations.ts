@@ -19,6 +19,15 @@ const PLAN_LIMITS: Record<string, number> = {
   ENTERPRISE: 999999, // ilimitado
 };
 
+// Planos com tokens incluídos (Sprint v0.4.0+) — controla custo real
+const PLAN_TOKEN_LIMITS: Record<string, number> = {
+  FREE: 50000,        // ~30 msgs
+  BASIC: 500000,      // ~300 msgs
+  PRO: 2000000,       // ~1200 msgs
+  ULTRA: 10000000,    // ~6000 msgs
+  ENTERPRISE: 999999999, // ilimitado
+};
+
 const CreateSchema = z.object({
   productName: z.string().min(1).max(120),
   clientName: z.string().min(1).max(120),
@@ -235,6 +244,7 @@ router.post("/:id/plan", async (req: AuthRequest, res: Response) => {
   }
   const days = Number.isFinite(periodDays) && periodDays > 0 ? Math.min(periodDays, 365) : 30;
   const newLimit = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
+  const newTokenLimit = PLAN_TOKEN_LIMITS[plan as keyof typeof PLAN_TOKEN_LIMITS];
   const periodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
   const existing = await prisma.installation.findUnique({ where: { id: req.params.id } });
@@ -248,6 +258,8 @@ router.post("/:id/plan", async (req: AuthRequest, res: Response) => {
       plan,
       usageLimit: newLimit,
       usageUsed: 0,
+      tokensLimit: newTokenLimit,
+      tokensUsed: 0,
       currentPeriodEnd: periodEnd,
       // Mudar pra plano pago também desbloqueia (se estava bloqueado)
       status: existing.status === "BLOCKED" || existing.status === "EXPIRED" ? "ACTIVE" : existing.status,
@@ -275,6 +287,7 @@ router.post("/:id/usage/reset", async (req: AuthRequest, res: Response) => {
     where: { id: req.params.id },
     data: {
       usageUsed: 0,
+      tokensUsed: 0,
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
