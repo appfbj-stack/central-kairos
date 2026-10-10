@@ -1,7 +1,20 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Package, User, Building2, Globe, Database, FileText, Calendar } from "lucide-react";
+
+const Field = ({
+  label, required, hint, icon: Icon, children,
+}: { label: string; required?: boolean; hint?: string; icon?: any; children: React.ReactNode }) => (
+  <div>
+    <label className="label flex items-center gap-1.5">
+      {Icon && <Icon size={12} className="text-gray-400" />}
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    {children}
+    {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
+  </div>
+);
 
 export default function InstallationForm() {
   const navigate = useNavigate();
@@ -54,10 +67,12 @@ export default function InstallationForm() {
         <ArrowLeft size={14} /> Voltar
       </Link>
 
-      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-1">Nova instalação</h1>
-      <p className="text-sm text-gray-500 mb-4 md:mb-6">
-        O ID será gerado automaticamente (APP-0001, APP-0002, ...) e não pode ser alterado depois.
-      </p>
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">Nova instalação</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          O ID será gerado automaticamente (APP-0001, APP-0002, ...) e não pode ser alterado depois.
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
@@ -65,8 +80,7 @@ export default function InstallationForm() {
 
       <form onSubmit={handleSubmit} className="card p-4 md:p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="label">Produto / Aplicativo *</label>
+          <Field label="Produto / Aplicativo" required icon={Package}>
             <input
               required
               value={form.productName}
@@ -74,9 +88,8 @@ export default function InstallationForm() {
               className="input"
               placeholder="Ex: Kairos Igreja"
             />
-          </div>
-          <div>
-            <label className="label">Nome do cliente *</label>
+          </Field>
+          <Field label="Nome do cliente" required icon={User}>
             <input
               required
               value={form.clientName}
@@ -84,18 +97,16 @@ export default function InstallationForm() {
               className="input"
               placeholder="Ex: Igreja OBPC"
             />
-          </div>
-          <div>
-            <label className="label">Nome da empresa</label>
+          </Field>
+          <Field label="Nome da empresa" icon={Building2}>
             <input
               value={form.companyName}
               onChange={(e) => setField("companyName", e.target.value)}
               className="input"
               placeholder="Ex: OBPC Sede Sorocaba"
             />
-          </div>
-          <div>
-            <label className="label">URL do aplicativo *</label>
+          </Field>
+          <Field label="URL do aplicativo" required icon={Globe} hint="URL pública (com https)">
             <input
               required
               type="url"
@@ -104,18 +115,16 @@ export default function InstallationForm() {
               className="input"
               placeholder="https://exemplo.com"
             />
-          </div>
-          <div>
-            <label className="label">Identificação do banco</label>
+          </Field>
+          <Field label="Identificação do banco" icon={Database} hint="Opcional — ex: kairos_igreja_db_v2">
             <input
               value={form.dbIdentifier}
               onChange={(e) => setField("dbIdentifier", e.target.value)}
               className="input"
-              placeholder="ex: kairos_igreja_db_v2"
+              placeholder="kairos_igreja_db_v2"
             />
-          </div>
-          <div>
-            <label className="label">Status inicial</label>
+          </Field>
+          <Field label="Status inicial" icon={FileText}>
             <select
               value={form.status}
               onChange={(e) => setField("status", e.target.value as any)}
@@ -125,39 +134,36 @@ export default function InstallationForm() {
               <option value="ACTIVE">Ativo</option>
               <option value="BLOCKED">Bloqueado</option>
             </select>
-          </div>
-          <div>
-            <label className="label">Início do teste</label>
+          </Field>
+          <Field label="Início do teste" icon={Calendar}>
             <input
               type="date"
               value={form.trialStartAt}
               onChange={(e) => setField("trialStartAt", e.target.value)}
               className="input"
             />
-          </div>
-          <div>
-            <label className="label">Fim do teste</label>
+          </Field>
+          <Field label="Fim do teste" icon={Calendar}>
             <input
               type="date"
               value={form.trialEndsAt}
               onChange={(e) => setField("trialEndsAt", e.target.value)}
               className="input"
             />
-          </div>
+          </Field>
         </div>
-        <div>
-          <label className="label">Observações</label>
+        <Field label="Observações" icon={FileText}>
           <textarea
             value={form.notes}
             onChange={(e) => setField("notes", e.target.value)}
             className="input min-h-[100px]"
             placeholder="Notas internas sobre esta instalação..."
           />
-        </div>
+        </Field>
 
         <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-gray-200">
           <Link to="/installations" className="btn btn-secondary">Cancelar</Link>
-          <button type="submit" disabled={saving} className="btn btn-primary">
+          <button type="submit" disabled={saving} className="btn btn-primary shadow-lg shadow-kairos-600/20">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {saving ? "Salvando..." : "Cadastrar"}
           </button>

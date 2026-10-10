@@ -84,6 +84,7 @@ export default function InstallationDetail() {
   }
 
   async function handleBlock() {
+    if (!installation) return;
     const reason = prompt("Motivo do bloqueio (opcional):");
     if (reason === null) return;
     try {
@@ -95,6 +96,7 @@ export default function InstallationDetail() {
   }
 
   async function handleUnblock() {
+    if (!installation) return;
     const reason = prompt("Motivo do desbloqueio (opcional):");
     if (reason === null) return;
     try {
@@ -106,6 +108,7 @@ export default function InstallationDetail() {
   }
 
   async function handleChangePlan(plan: Plan) {
+    if (!installation) return;
     const period = 30;
     if (!confirm(`Mudar para ${plan} (${PLAN_LIMITS[plan]} msgs) por ${period} dias?\nO contador de uso será ZERADO.`)) return;
     try {
@@ -120,6 +123,7 @@ export default function InstallationDetail() {
   }
 
   async function handleResetUsage() {
+    if (!installation) return;
     if (!confirm("Zerar contador de uso e estender período por mais 30 dias?")) return;
     try {
       await api.resetUsage(installation.id);
