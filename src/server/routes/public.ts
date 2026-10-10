@@ -66,17 +66,16 @@ router.post("/installation/:id/check-usage", async (req: Request, res: Response)
     });
   }
 
-  // Calcula se está bloqueado
+  // Calcula se está bloqueado (considera tokensToAdd para evitar estouro)
   const now = new Date();
   const periodExpired =
     installation.currentPeriodEnd !== null &&
     installation.currentPeriodEnd < now;
+  const tokensToAdd = parsed.data.tokensToAdd || 0;
   const usedOverLimit = installation.usageUsed >= installation.usageLimit;
-  const usedOverTokens = installation.tokensUsed >= installation.tokensLimit;
+  const usedOverTokens = (installation.tokensUsed + tokensToAdd) > installation.tokensLimit;
   const statusBlocked = installation.status === "BLOCKED" || installation.status === "EXPIRED";
   const allowed = !statusBlocked && !usedOverLimit && !usedOverTokens && !periodExpired;
-
-  const tokensToAdd = parsed.data.tokensToAdd || 0;
 
   if (allowed) {
     // Incrementa os contadores
