@@ -96,6 +96,31 @@ router.post("/link/confirm", async (req: ClientAuthRequest, res: Response) => {
   res.json({ deviceId: dev.id, deviceToken });
 });
 
+// GET /api/pwa/devices/by-otp - retorna deviceToken quando o vinculo foi confirmado na PWA.
+// Usado pelo agent (Electron) em modo polling: faz login uma vez (gera clientJwt
+// salvo localmente), cria o device PENDING, e fica chamando esse endpoint com o JWT
+// + otpToken completo (codigo.deviceToken) ate' ver status=ACTIVE + deviceToken.
+// Auth-pwa garante que o agent so' consulta devices da conta logada.
+const ByOtpQuery = z.object({ otpToken: z.string().min(10) });
+router.get("/by-otp", async (req: ClientAuthRequest, res: Response) => {
+  const parsed = ByOtpQuery.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "otpToken obrigatorio" });
+  const otpTokenPlain = parsed.data.otpToken;
+  const dotIdx = otpTokenPlain.indexOf(".");
+  if (dotIdx < 0) return res.status(400).json({ error: "Codigo malformado" });
+  const candidateDeviceToken = otpTokenPlain.slice(dotIdx + 1);
+
+  const dev = await prisma.device.findFirst({
+    where: { clientId: req.client!.clientId, deviceToken: candidateDeviceToken },
+    select: { id: true, status: true, deviceToken: true, name: true, createdAt: true, lastSeenAt: true },
+  });
+  if (!dev) return res.status(404).json({ status: "not_found" });
+  if (dev.status === "ACTIVE") {
+    return res.json({ status: "active", deviceId: dev.id, deviceToken: dev.deviceToken });
+  }
+  res.json({ status: "pending" });
+});
+
 // GET /api/pwa/devices - lista devices do client.
 router.get("/", async (req: ClientAuthRequest, res: Response) => {
   const list = await prisma.device.findMany({
