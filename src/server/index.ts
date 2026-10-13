@@ -13,6 +13,7 @@ import pwaConversationsRoutes from "./routes/pwa-conversations";
 import pwaDevicesRoutes from "./routes/pwa-devices";
 import pwaTasksRoutes from "./routes/pwa-tasks";
 import agentRoutes from "./routes/agent";
+import adminPwaRoutes from "./routes/admin-pwa";
 
 // Carrega .env em dev (em prod, variáveis vêm do docker run)
 if (process.env.NODE_ENV !== "production") {
@@ -55,6 +56,7 @@ app.use("/api/pwa/conversations", pwaConversationsRoutes);
 app.use("/api/pwa/devices", pwaDevicesRoutes);
 app.use("/api/pwa/tasks", pwaTasksRoutes);
 app.use("/api/agent", agentRoutes);
+app.use("/api/admin-pwa", adminPwaRoutes);
 
 // Serve frontend estático
 // OBS: __dirname em bundle CJS do esbuild vira apenas ".", por isso usamos process.cwd().

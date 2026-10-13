@@ -160,4 +160,132 @@ export const api = {
     const res = await fetch(BASE + `/public/installation/${id}/status`);
     return res.json();
   },
+
+  // ===== Admin PWA (Sprint 1.20) — Clients / Devices / Tasks =====
+  // Clients
+  async listAdminClients() {
+    return request<{
+      clients: AdminClient[];
+      total: number;
+      byStatus: Record<string, number>;
+      totalTokensUsed: number;
+    }>("/admin-pwa/clients");
+  },
+  async getAdminClient(id: string) {
+    return request<{ client: AdminClientDetail }>(`/admin-pwa/clients/${id}`);
+  },
+  async blockAdminClient(id: string, reason?: string) {
+    return request<{ client: AdminClient }>(`/admin-pwa/clients/${id}/block`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+  async unblockAdminClient(id: string) {
+    return request<{ client: AdminClient }>(`/admin-pwa/clients/${id}/unblock`, {
+      method: "POST",
+    });
+  },
+  async resetAdminClientTokens(id: string) {
+    return request<{ client: AdminClient }>(`/admin-pwa/clients/${id}/reset-tokens`, {
+      method: "POST",
+    });
+  },
+  async deleteAdminClient(id: string) {
+    return request<unknown>(`/admin-pwa/clients/${id}`, { method: "DELETE" });
+  },
+
+  // Devices
+  async listAdminDevices(params: { status?: string; kind?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.kind) qs.set("kind", params.kind);
+    const q = qs.toString();
+    return request<{
+      devices: AdminDevice[];
+      total: number;
+      byStatus: Record<string, number>;
+      byKind: Record<string, number>;
+    }>(`/admin-pwa/devices${q ? `?${q}` : ""}`);
+  },
+  async revokeAdminDevice(id: string) {
+    return request<{ device: AdminDevice }>(`/admin-pwa/devices/${id}/revoke`, {
+      method: "POST",
+    });
+  },
+
+  // Tasks
+  async listAdminTasks(params: { status?: string; kind?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.kind) qs.set("kind", params.kind);
+    const q = qs.toString();
+    return request<{
+      tasks: AdminTask[];
+      total: number;
+      byStatus: Record<string, number>;
+      byKind: Record<string, number>;
+    }>(`/admin-pwa/tasks${q ? `?${q}` : ""}`);
+  },
 };
+
+export type ClientStatus = "TRIAL" | "ACTIVE" | "BLOCKED" | "EXPIRED";
+
+export interface AdminClient {
+  id: string;
+  email: string;
+  name: string;
+  status: ClientStatus;
+  trialStartAt: string | null;
+  trialEndsAt: string | null;
+  tokensLimit: number;
+  tokensUsed: number;
+  currentPeriodEnd: string | null;
+  createdAt: string;
+  _count: { devices: number; conversations: number; sessions: number };
+}
+
+export interface AdminClientDetail extends AdminClient {
+  devices: Array<{
+    id: string; kind: string; name: string | null; os: string | null;
+    hardware: string | null; status: string; lastSeenAt: string | null; createdAt: string;
+  }>;
+  sessions: Array<{
+    id: string; createdAt: string; expiresAt: string; userAgent: string | null; ip: string | null;
+  }>;
+}
+
+export type DeviceKind = "PWA" | "ELECTRON";
+export type DeviceStatus = "PENDING" | "ACTIVE" | "REVOKED";
+
+export interface AdminDevice {
+  id: string;
+  clientId: string;
+  kind: DeviceKind;
+  name: string | null;
+  os: string | null;
+  hardware: string | null;
+  status: DeviceStatus;
+  lastSeenAt: string | null;
+  createdAt: string;
+  client: { id: string; email: string; name: string };
+}
+
+export type TaskStatus = "PENDING" | "SENT" | "RUNNING" | "DONE" | "ERROR" | "CANCELLED";
+
+export interface AdminTask {
+  id: string;
+  clientId: string;
+  deviceId: string | null;
+  conversationId: string | null;
+  kind: string;
+  status: TaskStatus;
+  result: string | null;
+  errorMsg: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  client: { id: string; email: string; name: string };
+  device: { id: string; kind: string; name: string | null } | null;
+}

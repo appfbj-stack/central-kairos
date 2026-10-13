@@ -6,8 +6,12 @@ import Dashboard from "./components/Dashboard";
 import InstallationList from "./components/InstallationList";
 import InstallationForm from "./components/InstallationForm";
 import InstallationDetail from "./components/InstallationDetail";
+import ClientsList from "./components/ClientsList";
+import DevicesList from "./components/DevicesList";
+import TasksList from "./components/TasksList";
 import {
   LogOut, LayoutDashboard, ListChecks, Plus, Menu, X, Sparkles, Bell, ChevronRight,
+  Users, Smartphone, ListTodo,
 } from "lucide-react";
 
 export default function App() {
@@ -79,6 +83,12 @@ export default function App() {
           <SideLink to="/" icon={<LayoutDashboard size={18} />} label="Dashboard" />
           <SideLink to="/installations" icon={<ListChecks size={18} />} label="Instalações" />
           <SideLink to="/installations/new" icon={<Plus size={18} />} label="Nova instalação" />
+          <div className="pt-3 pb-1 px-3 text-[10px] uppercase tracking-wider text-kairos-300/80 font-semibold">
+            PWA SaaS
+          </div>
+          <SideLink to="/pwa/clients" icon={<Users size={18} />} label="Clients" />
+          <SideLink to="/pwa/devices" icon={<Smartphone size={18} />} label="Devices" />
+          <SideLink to="/pwa/tasks" icon={<ListTodo size={18} />} label="Tasks" />
         </nav>
 
         <div className="p-3 border-t border-kairos-700/50">
@@ -117,6 +127,9 @@ export default function App() {
             <Route path="/installations" element={<InstallationList />} />
             <Route path="/installations/new" element={<InstallationForm />} />
             <Route path="/installations/:id" element={<InstallationDetail />} />
+            <Route path="/pwa/clients" element={<ClientsList />} />
+            <Route path="/pwa/devices" element={<DevicesList />} />
+            <Route path="/pwa/tasks" element={<TasksList />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

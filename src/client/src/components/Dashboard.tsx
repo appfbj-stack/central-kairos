@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, Installation, InstallationStatus } from "../lib/api";
 import {
   Clock, CheckCircle2, XCircle, AlertTriangle, Archive,
-  Plus, Sparkles, Users, TrendingUp, Zap
+  Plus, Sparkles, Users, TrendingUp, Zap, Smartphone, ListTodo, ArrowRight,
 } from "lucide-react";
 
 const STATUS_META: Record<InstallationStatus, { label: string; color: string; bg: string; icon: any }> = {
@@ -25,6 +25,7 @@ const STATUS_STYLE: Record<InstallationStatus, string> = {
 export default function Dashboard() {
   const [items, setItems] = useState<Installation[]>([]);
   const [byStatus, setByStatus] = useState<Record<string, number>>({});
+  const [pwaStats, setPwaStats] = useState<{ clients: number; devices: number; tasks: number; tokens: number }>({ clients: 0, devices: 0, tasks: 0, tokens: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,20 @@ export default function Dashboard() {
       .then((c) => { setItems(c.installations); setByStatus(c.byStatus); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    // Carrega stats PWA em paralelo (silencioso se falhar)
+    Promise.allSettled([
+      api.listAdminClients(),
+      api.listAdminDevices(),
+      api.listAdminTasks(),
+    ]).then((results) => {
+      const [c, d, t] = results;
+      setPwaStats({
+        clients: c.status === "fulfilled" ? c.value.total : 0,
+        tokens: c.status === "fulfilled" ? c.value.totalTokensUsed : 0,
+        devices: d.status === "fulfilled" ? d.value.total : 0,
+        tasks: t.status === "fulfilled" ? t.value.total : 0,
+      });
+    });
   }, []);
 
   const recent = [...items].sort((a, b) => +new Date(b.registeredAt) - +new Date(a.registeredAt)).slice(0, 5);
@@ -66,6 +81,25 @@ export default function Dashboard() {
         <StatCard icon={CheckCircle2} color="from-emerald-500 to-emerald-600" label="Ativas" value={active} subLabel="em produção" />
         <StatCard icon={Clock} color="from-amber-500 to-amber-600" label="Em teste" value={trial} subLabel="trial ativo" />
         <StatCard icon={Zap} color="from-violet-500 to-violet-600" label="Tokens" value={Math.round(totalTokens / 1000)} subLabel="mil no mês" />
+      </div>
+
+      {/* PWA SaaS stats */}
+      <div className="card p-4 md:p-5 mb-6 md:mb-8 bg-gradient-to-br from-kairos-50 to-white border-kairos-200">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold text-gray-800 text-sm md:text-base flex items-center gap-2">
+              <Sparkles size={16} className="text-kairos-600" />
+              PWA SaaS (Sprint 1.20)
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">Contas PWA + devices Electron pareados</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <PwaStatCard icon={Users} label="Clients" value={pwaStats.clients} to="/pwa/clients" />
+          <PwaStatCard icon={Smartphone} label="Devices" value={pwaStats.devices} to="/pwa/devices" />
+          <PwaStatCard icon={ListTodo} label="Tasks" value={pwaStats.tasks} to="/pwa/tasks" />
+          <PwaStatCard icon={Zap} label="Tokens PWA" value={Math.round(pwaStats.tokens / 1000)} sub="mil" to="/pwa/clients" />
+        </div>
       </div>
 
       {/* Status grid */}
@@ -164,5 +198,23 @@ function StatCard({ icon: Icon, color, label, value, subLabel }: { icon: any; co
       <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">{value}</p>
       <p className="text-[10px] text-gray-400 mt-1">{subLabel}</p>
     </div>
+  );
+}
+
+function PwaStatCard({ icon: Icon, label, value, sub, to }: { icon: any; label: string; value: number; sub?: string; to: string }) {
+  return (
+    <Link to={to} className="block p-3 bg-white rounded-lg border border-kairos-100 hover:border-kairos-300 hover:shadow-sm transition-all group">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-kairos-100 text-kairos-700">
+          <Icon size={14} />
+        </div>
+        <ArrowRight size={12} className="text-gray-300 group-hover:text-kairos-600 group-hover:translate-x-0.5 transition-all" />
+      </div>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">{label}</p>
+      <p className="text-xl font-bold text-gray-800 mt-0.5">
+        {value}
+        {sub && <span className="text-xs text-gray-400 ml-1 font-normal">{sub}</span>}
+      </p>
+    </Link>
   );
 }
