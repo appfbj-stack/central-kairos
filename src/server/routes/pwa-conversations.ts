@@ -107,12 +107,22 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   res.write(`event: assistant-start\ndata: ${JSON.stringify({ id: assistantMsg.id })}\n\n`);
 
   let fullText = "";
+  let visibleText = "";
   try {
     const result = await streamChat(
       history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
       (delta) => {
         fullText += delta;
-        res.write(`event: delta\ndata: ${JSON.stringify({ delta })}\n\n`);
+        // Filtra blocos <think>...</think> do MiniMax (chain-of-thought)
+        const clean = fullText.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trimStart();
+        if (clean.length > 0) {
+          // Calcula o delta que ainda nao foi emitido (pula o que estava dentro de <think>)
+          const visibleDelta = clean.slice(visibleText.length);
+          if (visibleDelta) {
+            visibleText = clean;
+            res.write(`event: delta\ndata: ${JSON.stringify({ delta: visibleDelta })}\n\n`);
+          }
+        }
       },
     );
 
@@ -120,7 +130,7 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
     await prisma.$transaction([
       prisma.message.update({
         where: { id: assistantMsg.id },
-        data: { content: fullText, status: "done", tokensIn: result.tokensIn, tokensOut: result.tokensOut },
+        data: { content: visibleText, status: "done", tokensIn: result.tokensIn, tokensOut: result.tokensOut },
       }),
       prisma.client.update({
         where: { id: client.id },
@@ -131,7 +141,7 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
 
     res.write(
       `event: done\ndata: ${JSON.stringify({
-        text: fullText,
+        text: visibleText,
         tokensIn: result.tokensIn,
         tokensOut: result.tokensOut,
         remaining: client.tokensLimit - (client.tokensUsed + result.tokensIn + result.tokensOut),
@@ -140,7 +150,7 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   } catch (err: any) {
     await prisma.message.update({
       where: { id: assistantMsg.id },
-      data: { content: fullText || "(erro)", status: "error" },
+      data: { content: visibleText || "(erro)", status: "error" },
     });
     res.write(`event: error\ndata: ${JSON.stringify({ message: err?.message || "erro" })}\n\n`);
   } finally {
