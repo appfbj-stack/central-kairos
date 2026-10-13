@@ -42,11 +42,11 @@ enum Plan {
 // ============================================================
 
 model AdminUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
   name         String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   lastLoginAt  DateTime?
 
   sessions AdminSession[]
@@ -68,26 +68,26 @@ model AdminSession {
 // ============================================================
 
 model Installation {
-  id            String             @id // "APP-0001" (gerado via max(id)+1)
-  productName   String             // "Kairos Igreja"
-  clientName    String             // "Igreja OBPC"
-  companyName   String?            // "OBPC Sede"
-  appUrl        String             // "https://igrejak.fbautomacao.space"
-  dbIdentifier  String?            // referência ao banco dela (ex: "kairos_igreja_db_v2")
-  status        InstallationStatus @default(TRIAL)
-  trialStartAt  DateTime?
-  trialEndsAt   DateTime?
-  registeredAt  DateTime           @default(now())
-  notes         String?
+  id           String             @id // "APP-0001" (gerado via max(id)+1)
+  productName  String // "Kairos Igreja"
+  clientName   String // "Igreja OBPC"
+  companyName  String? // "OBPC Sede"
+  appUrl       String // "https://igrejak.fbautomacao.space"
+  dbIdentifier String? // referência ao banco dela (ex: "kairos_igreja_db_v2")
+  status       InstallationStatus @default(TRIAL)
+  trialStartAt DateTime?
+  trialEndsAt  DateTime?
+  registeredAt DateTime           @default(now())
+  notes        String?
 
   // Licenciamento (Sprint v0.2.0+)
-  plan             Plan       @default(FREE) // plano atual do cliente
-  usageLimit       Int        @default(15)  // limite de mensagens no período
-  usageUsed        Int        @default(0)   // mensagens já consumidas no período
+  plan             Plan      @default(FREE) // plano atual do cliente
+  usageLimit       Int       @default(15) // limite de mensagens no período
+  usageUsed        Int       @default(0) // mensagens já consumidas no período
   // Token control (Sprint v0.4.0+) — limita custo real por mês
-  tokensLimit      Int        @default(50000)   // limite de tokens no período (50k default FREE)
-  tokensUsed       Int        @default(0)       // tokens já consumidos no período
-  currentPeriodEnd DateTime?               // quando reseta (mensal)
+  tokensLimit      Int       @default(50000) // limite de tokens no período (50k default FREE)
+  tokensUsed       Int       @default(0) // tokens já consumidos no período
+  currentPeriodEnd DateTime? // quando reseta (mensal)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,11 +109,180 @@ model InstallationStatusHistory {
   fromStatus     InstallationStatus?
   toStatus       InstallationStatus
   reason         String?
-  changedBy      String              // admin user id (texto, não FK rígida)
+  changedBy      String // admin user id (texto, não FK rígida)
 
   createdAt DateTime @default(now())
 
   installation Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
 
   @@index([installationId])
+}
+
+// ============================================================
+// PWA — Etapa 3a (Multi-cliente PWA + Agente Local + WebSocket)
+// Sprint 1.20 — 2026-10-13
+// Adiciona: Client (cliente PWA), Device (PWA + Electron), Task
+// (fila de jobs), Conversation + Message (historico), OtpCode
+// (2FA), ClientSession (revogavel), DeviceHeartbeat (status online)
+// ============================================================
+
+enum ClientStatus {
+  TRIAL
+  ACTIVE
+  BLOCKED
+  EXPIRED
+}
+
+enum DeviceKind {
+  PWA
+  ELECTRON
+}
+
+enum DeviceStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum TaskStatus {
+  PENDING
+  SENT
+  RUNNING
+  DONE
+  ERROR
+  CANCELLED
+}
+
+model Client {
+  id               String       @id @default(cuid())
+  email            String       @unique
+  passwordHash     String
+  name             String
+  status           ClientStatus @default(TRIAL)
+  trialStartAt     DateTime?
+  trialEndsAt      DateTime?
+  tokensLimit      Int          @default(50000)
+  tokensUsed       Int          @default(0)
+  currentPeriodEnd DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  devices       Device[]
+  conversations Conversation[]
+  sessions      ClientSession[]
+  otpCodes      OtpCode[]
+
+  @@index([status])
+  @@index([email])
+}
+
+model ClientSession {
+  id        String   @id @default(cuid())
+  clientId  String
+  jwtId     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+  ip        String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
+model Device {
+  id          String       @id @default(cuid())
+  clientId    String
+  kind        DeviceKind
+  name        String?
+  deviceToken String       @unique
+  os          String?
+  hardware    String?
+  status      DeviceStatus @default(PENDING)
+  lastSeenAt  DateTime?
+  trialEndsAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tasks  Task[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([deviceToken])
+}
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  clientId  String
+  codeHash  String
+  purpose   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  clientId  String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([clientId, updatedAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  toolCalls      Json?
+  tokensIn       Int      @default(0)
+  tokensOut      Int      @default(0)
+  status         String   @default("done")
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  clientId    String
+  deviceId    String?
+  convId      String?
+  kind        String
+  params      Json
+  result      Json?
+  errorMsg    String?
+  status      TaskStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([deviceId, status])
+}
+
+model DeviceHeartbeat {
+  id       BigInt   @id @default(autoincrement())
+  deviceId String
+  ts       DateTime @default(now())
+  online   Boolean
+  meta     Json?
+
+  @@index([deviceId, ts])
 }

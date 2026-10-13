@@ -8,6 +8,7 @@ import { prisma } from "./lib/prisma";
 import authRoutes from "./routes/auth";
 import installationsRoutes from "./routes/installations";
 import publicRoutes from "./routes/public";
+import pwaAuthRoutes from "./routes/pwa-auth";
 
 // Carrega .env em dev (em prod, variáveis vêm do docker run)
 if (process.env.NODE_ENV !== "production") {
@@ -45,6 +46,7 @@ app.use("/api/public", publicRoutes);
 // Authenticated routes
 app.use("/api/auth", authRoutes);
 app.use("/api/installations", installationsRoutes);
+app.use("/api/pwa/auth", pwaAuthRoutes);
 
 // Serve frontend estático
 // OBS: __dirname em bundle CJS do esbuild vira apenas ".", por isso usamos process.cwd().
