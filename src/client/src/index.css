@@ -44,12 +44,12 @@ body {
   }
 }
 
-/ Scroll suave
+/* Scroll suave */
 html {
   scroll-behavior: smooth;
 }
 
-/ Animações personalizadas
+/* Animações personalizadas */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
