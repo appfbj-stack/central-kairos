@@ -157,8 +157,8 @@ router.get("/me", clientAuthMiddleware, async (req: ClientAuthRequest, res) => {
 });
 
 // ---------- PASSWORD RESET: REQUEST ----------
-// MVP: retorna o codigo na propria resposta (sem SMTP). Quando SMTP for
-// configurado, enviar por email e remover o codigo da resposta.
+// Se SMTP_HOST estiver configurado (env), envia o codigo por email.
+// Sem SMTP, volta ao modo dev: codigo na propria response (devCode).
 const ResetReqSchema = z.object({ email: z.string().email() });
 
 router.post("/password-reset/request", async (req, res) => {
@@ -179,8 +179,13 @@ router.post("/password-reset/request", async (req, res) => {
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
-    // MVP: retorna codigo na resposta (sem SMTP)
-    resp.devCode = code;
+    // Tenta enviar via SMTP. Em modo dev (sem SMTP_HOST), devCode vai na response.
+    const { sendPasswordResetCode } = await import("../lib/email.js");
+    const result = await sendPasswordResetCode(client.email, code, client.name);
+    if (!result.viaSmtp) {
+      // Dev mode: retorna o codigo pra UI exibir (back-compat MVP)
+      resp.devCode = code;
+    }
   }
   res.json(resp);
 });
