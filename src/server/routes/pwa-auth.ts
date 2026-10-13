@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import { prisma } from "../lib/prisma";
 import { clientAuthMiddleware, ClientAuthRequest } from "../middleware/auth-pwa";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "central-kairos-dev-secret-CHANGEME";
@@ -74,6 +75,49 @@ router.post("/register", async (req, res) => {
   setAuthCookie(res, token);
 
   res.status(201).json({
+    token,
+    client: {
+      id: client.id,
+      email: client.email,
+      name: client.name,
+      status: client.status,
+      trialEndsAt: client.trialEndsAt,
+      tokensLimit: client.tokensLimit,
+      tokensUsed: client.tokensUsed,
+    },
+  });
+});
+
+// ---------- AUTO-LOGIN (dev) ----------
+// Se env AUTO_LOGIN_EMAIL estiver setado, esse endpoint cria/busca esse client
+// e devolve token direto, sem pedir senha. Usado pra demo / teste local.
+// EM PRODUCAO: NUNCA setar essa env. Login real (com senha) sempre funciona.
+router.get("/auto-login", async (_req, res) => {
+  const email = process.env.AUTO_LOGIN_EMAIL?.toLowerCase().trim();
+  if (!email) return res.status(404).json({ error: "Auto-login desabilitado" });
+
+  // Cria se nao existir
+  let client = await prisma.client.findUnique({ where: { email } });
+  if (!client) {
+    const passwordHash = await bcrypt.hash(crypto.randomUUID(), 8);
+    client = await prisma.client.create({
+      data: { email, name: email.split("@")[0], passwordHash, status: "TRIAL" },
+    });
+    logger.info({ email }, "[auto-login] cliente demo criado");
+  }
+
+  // Cria session + emite JWT
+  const jwtId = crypto.randomUUID();
+  const token = jwt.sign(
+    { clientId: client.id, email: client.email, jti: jwtId },
+    JWT_SECRET,
+    { expiresIn: "30d" }
+  );
+  await prisma.clientSession.create({
+    data: { clientId: client.id, jwtId, expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000) },
+  });
+
+  res.json({
     token,
     client: {
       id: client.id,
