@@ -248,6 +248,7 @@ model Message {
   conversationId String
   role           String
   content        String
+  attachments    Json?    // [{ name, mime, size, dataUrl }] - imagens inline (multimodal)
   toolCalls      Json?
   tokensIn       Int      @default(0)
   tokensOut      Int      @default(0)

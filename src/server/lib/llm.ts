@@ -1,11 +1,20 @@
 // Cliente LLM minimalista (Etapa 3b).
 // Streaming via SSE no formato OpenAI-compatible.
+// Suporta multimodal: messages[].content pode ser string OU array de ContentPart
+// (text + image_url). Compatível com OpenAI vision, MiniMax M3, e gateways
+// OpenAI-compatible (LM Studio, Ollama vision, vLLM).
 // Env vars: LLM_API_URL, LLM_API_KEY, LLM_MODEL.
 import type { Client } from "@prisma/client";
 
+export interface ContentPart {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string; detail?: "auto" | "low" | "high" };
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | ContentPart[];
 }
 
 export interface StreamResult {
@@ -42,7 +51,7 @@ export async function streamChat(
     model,
     stream: true,
     temperature: 0.7,
-    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    messages: [{ role: "system" as const, content: SYSTEM_PROMPT }, ...messages],
   };
 
   const resp = await fetch(url, {
@@ -69,7 +78,14 @@ export async function streamChat(
   let tokensOut = 0;
 
   // Heuristica simples: ~4 chars por token.
-  tokensIn = messages.reduce((acc, m) => acc + Math.ceil(m.content.length / 4), 0);
+  // Para multimodal, conta o texto das parts e ignora imagem (modelo multimodal
+  // normalmente cobra tokens de pixel, mas a heuristica não tem como precisar).
+  tokensIn = messages.reduce((acc, m) => {
+    const text = typeof m.content === "string"
+      ? m.content
+      : m.content.filter((p) => p.type === "text").map((p) => p.text || "").join("");
+    return acc + Math.ceil(text.length / 4);
+  }, 0);
 
   while (true) {
     const { done, value } = await reader.read();
