@@ -56,11 +56,26 @@ router.delete("/:id", async (req: ClientAuthRequest, res: Response) => {
 });
 
 // POST /api/pwa/conversations/:id/messages - envia msg, stream SSE da resposta.
-const MsgSchema = z.object({ content: z.string().min(1).max(8000) });
+// Aceita attachments (imagens inline em data URL base64) pra LLM multimodal.
+const AttachmentSchema = z.object({
+  name: z.string().min(1).max(200),
+  mime: z.string().regex(/^image\/(png|jpe?g|webp|gif)$/i),
+  size: z.number().int().min(1).max(10 * 1024 * 1024), // 10MB por imagem
+  dataUrl: z.string().min(1).max(20 * 1024 * 1024), // data URL base64 (sobe ~33% sobre binario)
+});
+
+const MsgSchema = z.object({
+  content: z.string().min(1).max(8000),
+  attachments: z.array(AttachmentSchema).max(4).optional(),
+});
+
+type Attachment = z.infer<typeof AttachmentSchema>;
 
 router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   const parsed = MsgSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Dados invalidos" });
+
+  const { content, attachments = [] } = parsed.data;
 
   // Verifica que conversa pertence ao cliente.
   const conv = await prisma.conversation.findFirst({
@@ -75,9 +90,14 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   const guard = isClientBlocked(client, 0);
   if (!guard.ok) return res.status(403).json({ error: guard.reason });
 
-  // Salva a msg do usuario.
+  // Salva a msg do usuario (com attachments em JSON).
   const userMsg = await prisma.message.create({
-    data: { conversationId: conv.id, role: "user", content: parsed.data.content },
+    data: {
+      conversationId: conv.id,
+      role: "user",
+      content,
+      attachments: attachments.length > 0 ? (attachments as unknown as object) : undefined,
+    },
     select: { id: true, createdAt: true },
   });
 
@@ -86,7 +106,7 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
     where: { conversationId: conv.id },
     orderBy: { createdAt: "asc" },
     take: 20,
-    select: { role: true, content: true },
+    select: { role: true, content: true, attachments: true },
   });
 
   // Setup SSE.
@@ -109,8 +129,23 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   let fullText = "";
   let visibleText = "";
   try {
+    // Monta payload pro LLM. A ULTIMA msg do user pode ter attachments
+    // (imagens), que viram ContentPart[]. As demais viram string pura.
+    const llmMessages = history.map((m, idx) => {
+      const isLastUser = idx === history.length - 1 && m.role === "user";
+      const att = isLastUser ? (m.attachments as Attachment[] | null) : null;
+      if (att && Array.isArray(att) && att.length > 0) {
+        const parts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [
+          { type: "text", text: m.content },
+          ...att.map((a) => ({ type: "image_url" as const, image_url: { url: a.dataUrl } })),
+        ];
+        return { role: "user" as const, content: parts };
+      }
+      return { role: m.role as "user" | "assistant", content: m.content };
+    });
+
     const result = await streamChat(
-      history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      llmMessages,
       (delta) => {
         fullText += delta;
         // Filtra blocos <think>...</think> do MiniMax (chain-of-thought)
