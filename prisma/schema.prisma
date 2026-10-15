@@ -24,11 +24,11 @@ enum InstallationStatus {
   ARCHIVED
 }
 
-// Planos comerciais (Sprint v0.2.0+)
-// FREE: 15 msgs/mês (trial)
-// BASIC: 100 msgs/mês
-// PRO: 200 msgs/mês
-// ULTRA: 300 msgs/mês
+// Planos comerciais (Sprint v0.2.0+, atualizado 2026-10-15)
+// FREE: 10 msgs/dia (trial)
+// BASIC: 70 msgs/mês (R$ 30)
+// PRO: 150 msgs/mês (R$ 50)
+// ULTRA: 350 msgs/mês (R$ 99)
 // ENTERPRISE: ilimitado
 enum Plan {
   FREE
@@ -36,6 +36,14 @@ enum Plan {
   PRO
   ULTRA
   ENTERPRISE
+}
+
+// Tipo de período de reset (Sprint 2026-10-15)
+// DAILY: FREE reseta a cada 24h
+// MONTHLY: planos pagos reseta a cada 30 dias
+enum PeriodType {
+  DAILY
+  MONTHLY
 }
 
 // ============================================================
@@ -81,14 +89,16 @@ model Installation {
   registeredAt DateTime           @default(now())
   notes        String?
 
-  // Licenciamento (Sprint v0.2.0+)
-  plan             Plan      @default(FREE) // plano atual do cliente
-  usageLimit       Int       @default(15) // limite de mensagens no período
-  usageUsed        Int       @default(0) // mensagens já consumidas no período
-  // Token control (Sprint v0.4.0+) — limita custo real por mês
-  tokensLimit      Int       @default(50000) // limite de tokens no período (50k default FREE)
-  tokensUsed       Int       @default(0) // tokens já consumidos no período
-  currentPeriodEnd DateTime? // quando reseta (mensal)
+  // Licenciamento (Sprint v0.2.0+, atualizado 2026-10-15)
+  plan             Plan       @default(FREE) // plano atual do cliente
+  usageLimit       Int        @default(10) // limite de mensagens no período
+  usageUsed        Int        @default(0) // mensagens já consumidas no período
+  periodType       PeriodType @default(MONTHLY)
+  // Token control (Sprint 2026-10-15) — limita custo real por mês
+  tokensLimit      Int        @default(30000) // limite de tokens no período (30k default FREE)
+  tokensUsed       Int        @default(0) // tokens já consumidos no período
+  outputTokenCap   Int        @default(500) // cap de output por request
+  currentPeriodEnd DateTime? // quando reseta (mensal ou diário)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -162,8 +172,15 @@ model Client {
   status           ClientStatus @default(TRIAL)
   trialStartAt     DateTime?
   trialEndsAt      DateTime?
-  tokensLimit      Int          @default(50000)
+  // Plano comercial (Sprint 2026-10-15)
+  plan             Plan         @default(FREE)
+  usageLimit       Int          @default(10)
+  usageUsed        Int          @default(0)
+  periodType       PeriodType   @default(DAILY)
+  // Controle de tokens (Sprint 2026-10-15)
+  tokensLimit      Int          @default(30000)
   tokensUsed       Int          @default(0)
+  outputTokenCap   Int          @default(500)
   currentPeriodEnd DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt

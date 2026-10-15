@@ -12,20 +12,38 @@ const PLAN_VALUES = ["FREE", "BASIC", "PRO", "ULTRA", "ENTERPRISE"] as const;
 
 // Planos com mensagens incluídas (Sprint v0.2.0+)
 const PLAN_LIMITS: Record<string, number> = {
-  FREE: 15,
-  BASIC: 100,
-  PRO: 200,
-  ULTRA: 300,
+  FREE: 10,         // 10 msgs/dia (Sprint 2026-10-15)
+  BASIC: 70,        // 70 msgs/mês
+  PRO: 150,         // 150 msgs/mês
+  ULTRA: 350,       // 350 msgs/mês
   ENTERPRISE: 999999, // ilimitado
 };
 
-// Planos com tokens incluídos (Sprint v0.4.0+) — controla custo real
+// Planos com tokens incluídos (Sprint 2026-10-15) — controla custo real
 const PLAN_TOKEN_LIMITS: Record<string, number> = {
-  FREE: 50000,        // ~30 msgs
-  BASIC: 500000,      // ~300 msgs
-  PRO: 2000000,       // ~1200 msgs
-  ULTRA: 10000000,    // ~6000 msgs
+  FREE: 30000,      // ~20 msgs
+  BASIC: 200000,    // ~200 msgs
+  PRO: 750000,      // ~500 msgs
+  ULTRA: 2500000,   // ~1500 msgs
   ENTERPRISE: 999999999, // ilimitado
+};
+
+// Output token cap por request (Sprint 2026-10-15) — defesa contra respostas gigantes
+const PLAN_OUTPUT_TOKEN_CAPS: Record<string, number> = {
+  FREE: 500,
+  BASIC: 1000,
+  PRO: 2000,
+  ULTRA: 4000,
+  ENTERPRISE: 8000,
+};
+
+// Período de reset por plan (Sprint 2026-10-15) — FREE reseta a cada 24h
+const PLAN_PERIOD_TYPE: Record<string, "DAILY" | "MONTHLY"> = {
+  FREE: "DAILY",
+  BASIC: "MONTHLY",
+  PRO: "MONTHLY",
+  ULTRA: "MONTHLY",
+  ENTERPRISE: "MONTHLY",
 };
 
 const CreateSchema = z.object({
@@ -252,6 +270,8 @@ router.post("/:id/plan", async (req: AuthRequest, res: Response) => {
     return res.status(404).json({ error: "Instalação não encontrada" });
   }
 
+  const newOutputCap = PLAN_OUTPUT_TOKEN_CAPS[plan as keyof typeof PLAN_OUTPUT_TOKEN_CAPS];
+  const newPeriodType = PLAN_PERIOD_TYPE[plan as keyof typeof PLAN_PERIOD_TYPE];
   const updated = await prisma.installation.update({
     where: { id: req.params.id },
     data: {
@@ -260,6 +280,8 @@ router.post("/:id/plan", async (req: AuthRequest, res: Response) => {
       usageUsed: 0,
       tokensLimit: newTokenLimit,
       tokensUsed: 0,
+      outputTokenCap: newOutputCap,
+      periodType: newPeriodType,
       currentPeriodEnd: periodEnd,
       // Mudar pra plano pago também desbloqueia (se estava bloqueado)
       status: existing.status === "BLOCKED" || existing.status === "EXPIRED" ? "ACTIVE" : existing.status,
