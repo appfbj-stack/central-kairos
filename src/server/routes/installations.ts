@@ -122,6 +122,13 @@ router.post("/", async (req: AuthRequest, res: Response) => {
   const data = parsed.data;
   const newId = await nextInstallationId();
 
+  // Default FREE: 10/dia; resto: 30d (Sprint 2026-10-15)
+  const defaultPlan: keyof typeof PLAN_PERIOD_TYPE = "FREE";
+  const defaultPeriodType = PLAN_PERIOD_TYPE[defaultPlan];
+  const defaultUsageLimit = PLAN_LIMITS[defaultPlan];
+  const defaultTokenLimit = PLAN_TOKEN_LIMITS[defaultPlan];
+  const defaultOutputCap = PLAN_OUTPUT_TOKEN_CAPS[defaultPlan];
+
   const created = await prisma.installation.create({
     data: {
       id: newId,
@@ -134,6 +141,14 @@ router.post("/", async (req: AuthRequest, res: Response) => {
       trialStartAt: data.trialStartAt ? new Date(data.trialStartAt) : null,
       trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
       notes: data.notes || null,
+      // Sprint 2026-10-15: defaults alinhados com o plano
+      plan: "FREE",
+      usageLimit: defaultUsageLimit,
+      usageUsed: 0,
+      periodType: defaultPeriodType,
+      tokensLimit: defaultTokenLimit,
+      tokensUsed: 0,
+      outputTokenCap: defaultOutputCap,
     },
   });
 
