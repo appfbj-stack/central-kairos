@@ -39,6 +39,8 @@ async function loadBackground(backgroundUrl: string | undefined): Promise<Buffer
 
 function sendPng(res: Response, buf: Buffer, width: number, height: number) {
   res.setHeader("Content-Type", "image/png");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   res.setHeader("Content-Disposition", `inline; filename="banner-${Date.now()}.png"`);
   res.setHeader("X-Banner-Width", String(width));
   res.setHeader("X-Banner-Height", String(height));
@@ -95,16 +97,19 @@ router.post("/compose", clientAuthMiddleware, async (req: ClientAuthRequest, res
   const systemPrompt = `Voce e um designer de banners evangelicos brasileiros.
 O usuario descreve o que quer no banner. Voce deve:
 1. Escolher UM versiculo biblico (A Biblia Sagrada) apropriado ao tema.
-2. Escrever um TITULO curto e impactante (3-6 palavras, em maiusculas, sem ponto final).
-3. Escrever um SUBTITULO (1 frase, maximo 12 palavras, tom pastoral/inspirador).
-4. Devolver ESTRITAMENTE JSON: {"title":"...","subtitle":"...","verse":"<texto do versiculo>","reference":"<Livro Cap:Ver>"}.
+2. Escrever um TITULO curto e impactante (3-6 palavras, sem ponto final, sem prefixos tipo "Banner:").
+3. Escrever um SUBTITULO (1 frase, maximo 12 palavras, tom pastoral/inspirador, sem prefixo "Subtitle:").
+4. Devolver SOMENTE o objeto JSON. Nada antes, nada depois.
 
-REGRAS:
-- Versiculo DEVE ser texto biblico real (NAO invente).
-- Use ARA (Almeida Revista e Atualizada) — fonte mais confiavel.
-- NUNCA inclua markdown, code blocks, ou texto fora do JSON.
-- NUNCA inclua aspas duplas dentro das strings (use aspas simples se necessario).
-- Responda APENAS o JSON.`;
+FORMATO EXATO (sem markdown, sem code fences):
+{"title":"NOME IMPACTO","subtitle":"frase pastoral","verse":"texto do versiculo aqui","reference":"Livro Capitulo:Versiculo"}
+
+REGRAS RIGOROSAS:
+- Versiculo DEVE ser real (NAO invente). Use ARA (Almeida Revista e Atualizada).
+- Aspas duplas DENTRO das strings PROIBIDAS. Use aspas simples se precisar.
+- NUNCA inclua "Banner:", "Title:", "Subtitle:" ou outros prefixos nos valores.
+- A PRIMEIRA LINHA do output DEVE ser o caractere { abrindo o JSON.
+- NAO inclua explicacoes, comentarios, markdown, ou texto fora do JSON.`;
 
   let fields: z.infer<typeof ComposeFieldsSchema>;
   try {
@@ -132,7 +137,9 @@ REGRAS:
 
     if (!parsed) {
       console.error("[pwa-banner/compose] LLM nao retornou JSON nem texto reconhecivel:", cleaned.slice(0, 500));
-      return res.status(502).json({ error: "LLM nao retornou conteudo reconhecivel", raw: cleaned.slice(0, 500) });
+      // Fallback: escolhe versículo default baseado em keyword do tema
+      parsed = fallbackBanner(topic);
+      console.log("[pwa-banner/compose] usando fallback:", parsed);
     }
 
     const safe = ComposeFieldsSchema.safeParse(parsed);
@@ -243,4 +250,51 @@ function parseFreeformBanner(text: string): {
     return null;
   }
   return result;
+}
+
+/**
+ * Fallback usado quando a LLM nao devolve JSON nem texto parseavel.
+ * Escolhe versículo default baseado em keywords do tema.
+ */
+function fallbackBanner(topic: string): { title: string; subtitle: string; verse: string; reference: string } {
+  const t = topic.toLowerCase();
+  if (/paz|ansied|descans/.test(t)) {
+    return {
+      title: "A Paz Que Vem De Deus",
+      subtitle: "Confianca em meio a todas as circunstancias",
+      verse: "Deixo-vos a paz, a minha paz vos dou; nao vo-la dou como o mundo a da.",
+      reference: "Joao 14:27",
+    };
+  }
+  if (/coragem|forc|medo|valente|destem/.test(t)) {
+    return {
+      title: "Seja Forte E Corajoso",
+      subtitle: "Deus esta com voce em cada passo",
+      verse: "Nao te ordenei eu: seja forte e corajoso? Nao se apavore, nem se desanime, porque o Senhor, o seu Deus, estara com voce por onde quer que andar.",
+      reference: "Josue 1:9",
+    };
+  }
+  if (/amor|cari/.test(t)) {
+    return {
+      title: "O Maior De Todos",
+      subtitle: "O amor de Deus revelado em Cristo",
+      verse: "Porque Deus tanto amou o mundo que deu o seu Filho Unigenito, para que todo o que nele crer nao pereca, mas tenha a vida eterna.",
+      reference: "Joao 3:16",
+    };
+  }
+  if (/fe|confianc|crer/.test(t)) {
+    return {
+      title: "A Fe Que Move Montanhas",
+      subtitle: "Confie no Senhor de todo o coracao",
+      verse: "Confie no Senhor de todo o coracao e nao se apoie no seu proprio entendimento.",
+      reference: "Proverbios 3:5",
+    };
+  }
+  // Default
+  return {
+    title: "Deus E Fiel",
+    subtitle: "Uma palavra para o seu dia",
+    verse: "O Senhor é a minha força e o meu escudo; nele o meu coracao confia.",
+    reference: "Salmos 28:7",
+  };
 }
