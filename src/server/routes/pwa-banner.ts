@@ -179,71 +179,118 @@ export default router;
 
 /**
  * Parser de texto livre: quando a LLM ignora o pedido de JSON e devolve
- * markdown, extrai titulo (linha curta em CAIXA ALTA), subtitulo (linha
- * seguinte nao-vazia), versiculo (linha entre aspas) e referencia (ultimo
- * token com formato "Livro Capitulo:Versiculo").
+ * markdown, extrai titulo, subtitulo, versiculo e referencia.
  */
 function parseFreeformBanner(text: string): {
   title?: string; subtitle?: string; verse?: string; reference?: string;
 } | null {
   const result: { title?: string; subtitle?: string; verse?: string; reference?: string } = {};
+
   // 1) Referencia biblica: "Livro Cap:Ver" (ex: "Joao 3:16", "1 Pedro 5:7", "Salmos 23:1")
-  // Aceita acentos basicos.
   const refMatch = text.match(/\b((?:1|2|3|)?\s?[A-ZÁÉÍÓÚÂÊÔÇ][a-záéíóúâêôçãõ]+(?:\s[A-ZÁÉÍÓÚÂÊÔÇ][a-záéíóúâêôçãõ]+)?)\s+(\d{1,3}):(\d{1,3}(?:-\d{1,3})?)\b/);
   if (refMatch) {
     result.reference = `${refMatch[1]} ${refMatch[2]}:${refMatch[3]}`;
   }
 
-  // 2) Versiculo: maior bloco entre aspas duplas OU linha com "..."
-  const verseMatch = text.match(/"([^"]{10,300})"/);
+  // 2) Versiculo: bloco entre aspas duplas
+  const verseMatch = text.match(/"([^"]{10,400})"/);
   if (verseMatch) {
     result.verse = verseMatch[1].trim();
   } else {
-    // Pega o maior paragrafo entre a referencia e o titulo
+    // Heuristica: maior paragrafo entre referencia e titulo
     const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
     const refIdx = refMatch ? lines.findIndex((l) => l.includes(refMatch[0])) : lines.length;
-    const titleIdx = lines.findIndex((l) => /^[A-ZÁÉÍÓÚÂÊÔÇ0-9 ,.'!?-]{3,60}$/.test(l) && l === l.toUpperCase());
-    if (titleIdx >= 0 && refIdx > titleIdx + 1) {
-      // entre titulo e referencia: pega o paragrafo mais longo
-      const between = lines.slice(titleIdx + 1, refIdx).filter((l) => l.length > 20);
-      if (between.length > 0) result.verse = between[0];
+    // entre titulo (linha uppercase curta) e referencia: paragrafo mais longo
+    const candidates: { idx: number; line: string }[] = [];
+    lines.forEach((l, i) => {
+      if (i < refIdx && l.length > 30 && !l.startsWith("#") && !l.startsWith("**") && !/^https?:/.test(l)) {
+        candidates.push({ idx: i, line: l });
+      }
+    });
+    if (candidates.length > 0) {
+      // pega o mais longo
+      candidates.sort((a, b) => b.line.length - a.line.length);
+      result.verse = candidates[0].line.replace(/[*_`]/g, "").trim();
     }
   }
 
-  // 3) Titulo: linha curta em CAIXA ALTA (sem pontos finais)
+  // 3) Titulo: procura padroes comuns
   const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-  for (const l of lines) {
-    if (/^#+\s*/.test(l)) {
-      const t = l.replace(/^#+\s*/, "").replace(/[*_`]/g, "").trim();
-      // Limpa prefixos indesejados tipo "Banner: ", "Banner — ", "Title: "
-      const cleaned = t.replace(/^banner\s*[:\-—|]\s*/i, "").replace(/^titulo\s*[:\-—|]\s*/i, "").trim();
-      if (cleaned.length >= 3 && cleaned.length <= 60) { result.title = cleaned; break; }
-    }
-    if (l === l.toUpperCase() && l.length >= 3 && l.length <= 60 && /[A-ZÁÉÍÓÚÂÊÔÇ]/.test(l)) {
-      const cleaned = l.replace(/[*_`]/g, "").replace(/^banner\s*[:\-—|]\s*/i, "").replace(/^titulo\s*[:\-—|]\s*/i, "").trim();
-      result.title = cleaned;
-      break;
+  const cleanTitle = (s: string) =>
+    s
+      .replace(/^#+\s*/, "")
+      .replace(/[*_`]/g, "")
+      .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]\s*/u, "") // tira emoji
+      .replace(/^banner\s*[:\-—|]\s*/i, "")
+      .replace(/^conceito\s+de\s+banner\s*[:\-—|]?\s*/i, "")
+      .replace(/^titulo\s*[:\-—|]\s*/i, "")
+      .replace(/\s*\((kair[oó]s|kairos)\)\s*$/i, "") // tira (Kairos) no final
+      .replace(/\s*\|\s*kair[oó]s\s*$/i, "") // tira | Kairos
+      .replace(/\s*[-—]\s*kair[oó]s\s*$/i, "") // tira - Kairos
+      .trim();
+
+  // 3a) Procura "**Titulo:** X" (markdown bold)
+  const boldTitle = text.match(/\*\*\s*t[ií]tulo\s*:\*\*\s*([^*\n]{3,200})/i);
+  if (boldTitle) {
+    const t = cleanTitle(boldTitle[1]);
+    if (t.length >= 3 && t.length <= 60) result.title = t;
+  }
+
+  // 3b) Procura "# X" (markdown header)
+  if (!result.title) {
+    for (const l of lines) {
+      if (/^#+\s+/.test(l) && !/^#+\s*banners?\s*$/i.test(l)) {
+        const t = cleanTitle(l);
+        if (t.length >= 3 && t.length <= 60) { result.title = t; break; }
+      }
     }
   }
 
-  // 4) Subtitulo: linha nao-vazia logo apos o titulo
-  if (result.title) {
-    const titleIdx = lines.findIndex((l) => l.replace(/[#*_`]/g, "").trim() === result.title);
+  // 3c) Procura linha em CAIXA ALTA curta
+  if (!result.title) {
+    for (const l of lines) {
+      if (/^[A-ZÁÉÍÓÚÂÊÔÇ][A-ZÁÉÍÓÚÂÊÔÇ0-9 ,.'!?-]+$/.test(l) && l.length >= 3 && l.length <= 60) {
+        const t = cleanTitle(l);
+        if (t.length >= 3 && t.length <= 60) { result.title = t; break; }
+      }
+    }
+  }
+
+  // 4) Subtitulo
+  const cleanSubtitle = (s: string) =>
+    s
+      .replace(/^#+\s*/, "")
+      .replace(/[*_`]/g, "")
+      .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]\s*/u, "")
+      .replace(/^subt[ií]tulo\s*[:\-—|]?\s*/i, "")
+      .replace(/^suge(?:r|sta|ren|rir)(?:stoes|tao|coes|rido)?\s*(?:de\s+)?(?:vers[ií]culos?|frases?)?\s*[:\-—|]?\s*/i, "")
+      .replace(/^texto\s*[:\-—|]?\s*/i, "")
+      .trim();
+
+  // 4a) Procura "**Subtitulo:** X" (markdown bold)
+  const boldSub = text.match(/\*\*\s*subt[ií]tulo\s*:\*\*\s*([^*\n]{3,200})/i);
+  if (boldSub) {
+    const s = cleanSubtitle(boldSub[1]);
+    if (s.length >= 5 && s.length <= 150) result.subtitle = s;
+  }
+
+  // 4b) Procura linha apos o titulo (ja uppercase), linha comeca com letra normal
+  if (!result.subtitle && result.title) {
+    const titleIdx = lines.findIndex((l) => cleanTitle(l) === result.title);
     if (titleIdx >= 0) {
       for (let i = titleIdx + 1; i < lines.length; i++) {
-        const l = lines[i].replace(/[#*_`]/g, "").trim()
-          // Limpa prefixo "Subtitle: " etc
-          .replace(/^subtitulo\s*[:\-—|]\s*/i, "").replace(/^subtitle\s*[:\-—|]\s*/i, "")
-          // Limpa prefixo "Sujestao/Sugestao" que a LLM gosta de botar
-          .replace(/^suge(?:r|sta|ren)(?:stoes|tao|coes)?\s*(?:de\s+)?(?:vers[ií]culos?|frases?)?\s*[:\-—|]?\s*/i, "")
-          .trim();
-        if (l.length >= 5 && l.length <= 150 && l !== result.title && !l.startsWith(result.reference || "_")) {
+        const l = cleanSubtitle(lines[i]);
+        if (l.length >= 5 && l.length <= 150 && l !== result.title && !l.startsWith(result.reference || "_") && !/^[*-]\s/.test(l)) {
           result.subtitle = l;
           break;
         }
       }
     }
   }
+
+  // 5) Se titulo vier vazio depois de limpar, descarta
+  if (result.title && result.title.length < 3) delete result.title;
+  if (result.subtitle && result.subtitle.length < 5) delete result.subtitle;
 
   // Validação minima
   if (!result.title || !result.verse || !result.reference) {
