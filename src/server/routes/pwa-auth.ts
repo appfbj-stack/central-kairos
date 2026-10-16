@@ -192,7 +192,12 @@ router.get("/me", clientAuthMiddleware, async (req: ClientAuthRequest, res) => {
     where: { id: req.client!.clientId },
     select: {
       id: true, email: true, name: true, status: true,
-      trialEndsAt: true, tokensLimit: true, tokensUsed: true, currentPeriodEnd: true,
+      trialEndsAt: true,
+      // Token cap (novo) — exibido no header do chat
+      plan: true, usageLimit: true, usageUsed: true, periodType: true, outputTokenCap: true,
+      currentPeriodEnd: true,
+      // Tokens (legado, mantido pra back-compat)
+      tokensLimit: true, tokensUsed: true,
       createdAt: true,
     },
   });
