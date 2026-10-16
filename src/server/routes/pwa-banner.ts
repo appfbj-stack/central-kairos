@@ -115,16 +115,30 @@ REGRAS:
     );
     // Filtra blocos <think>...</think> do MiniMax (chain-of-thought)
     acc = acc.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trimStart();
-    // Limpa code fences caso a LLM retorne
-    acc = acc.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
-    // Pega o primeiro objeto {...} da resposta
-    const m = acc.match(/\{[\s\S]*\}/);
-    const jsonStr = m ? m[0] : acc;
-    const parsedJson = JSON.parse(jsonStr);
-    const safe = ComposeFieldsSchema.safeParse(parsedJson);
+
+    // Tenta 1: JSON direto
+    const cleaned = acc.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
+    const m = cleaned.match(/\{[\s\S]*\}/);
+
+    let parsed: any = null;
+    if (m) {
+      try { parsed = JSON.parse(m[0]); } catch { /* tenta parser de texto livre */ }
+    }
+
+    // Tenta 2: parser de texto livre
+    if (!parsed) {
+      parsed = parseFreeformBanner(cleaned);
+    }
+
+    if (!parsed) {
+      console.error("[pwa-banner/compose] LLM nao retornou JSON nem texto reconhecivel:", cleaned.slice(0, 500));
+      return res.status(502).json({ error: "LLM nao retornou conteudo reconhecivel", raw: cleaned.slice(0, 500) });
+    }
+
+    const safe = ComposeFieldsSchema.safeParse(parsed);
     if (!safe.success) {
-      console.error("[pwa-banner/compose] LLM retornou JSON invalido:", parsedJson, "errors:", safe.error.issues);
-      return res.status(502).json({ error: "LLM retornou JSON invalido", details: safe.error.issues, raw: acc.slice(0, 500) });
+      console.error("[pwa-banner/compose] parser nao casou schema:", parsed, "errors:", safe.error.issues);
+      return res.status(502).json({ error: "Parser nao casou schema esperado", details: safe.error.issues, raw: cleaned.slice(0, 500) });
     }
     fields = safe.data;
   } catch (err: any) {
@@ -155,3 +169,70 @@ REGRAS:
 });
 
 export default router;
+
+/**
+ * Parser de texto livre: quando a LLM ignora o pedido de JSON e devolve
+ * markdown, extrai titulo (linha curta em CAIXA ALTA), subtitulo (linha
+ * seguinte nao-vazia), versiculo (linha entre aspas) e referencia (ultimo
+ * token com formato "Livro Capitulo:Versiculo").
+ */
+function parseFreeformBanner(text: string): {
+  title?: string; subtitle?: string; verse?: string; reference?: string;
+} | null {
+  const result: { title?: string; subtitle?: string; verse?: string; reference?: string } = {};
+  // 1) Referencia biblica: "Livro Cap:Ver" (ex: "Joao 3:16", "1 Pedro 5:7", "Salmos 23:1")
+  // Aceita acentos basicos.
+  const refMatch = text.match(/\b((?:1|2|3|)?\s?[A-ZÁÉÍÓÚÂÊÔÇ][a-záéíóúâêôçãõ]+(?:\s[A-ZÁÉÍÓÚÂÊÔÇ][a-záéíóúâêôçãõ]+)?)\s+(\d{1,3}):(\d{1,3}(?:-\d{1,3})?)\b/);
+  if (refMatch) {
+    result.reference = `${refMatch[1]} ${refMatch[2]}:${refMatch[3]}`;
+  }
+
+  // 2) Versiculo: maior bloco entre aspas duplas OU linha com "..."
+  const verseMatch = text.match(/"([^"]{10,300})"/);
+  if (verseMatch) {
+    result.verse = verseMatch[1].trim();
+  } else {
+    // Pega o maior paragrafo entre a referencia e o titulo
+    const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const refIdx = refMatch ? lines.findIndex((l) => l.includes(refMatch[0])) : lines.length;
+    const titleIdx = lines.findIndex((l) => /^[A-ZÁÉÍÓÚÂÊÔÇ0-9 ,.'!?-]{3,60}$/.test(l) && l === l.toUpperCase());
+    if (titleIdx >= 0 && refIdx > titleIdx + 1) {
+      // entre titulo e referencia: pega o paragrafo mais longo
+      const between = lines.slice(titleIdx + 1, refIdx).filter((l) => l.length > 20);
+      if (between.length > 0) result.verse = between[0];
+    }
+  }
+
+  // 3) Titulo: linha curta em CAIXA ALTA (sem pontos finais)
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  for (const l of lines) {
+    if (/^#+\s*/.test(l)) {
+      const t = l.replace(/^#+\s*/, "").replace(/[*_`]/g, "").trim();
+      if (t.length >= 3 && t.length <= 60) { result.title = t; break; }
+    }
+    if (l === l.toUpperCase() && l.length >= 3 && l.length <= 60 && /[A-ZÁÉÍÓÚÂÊÔÇ]/.test(l)) {
+      result.title = l.replace(/[*_`]/g, "").trim();
+      break;
+    }
+  }
+
+  // 4) Subtitulo: linha nao-vazia logo apos o titulo
+  if (result.title) {
+    const titleIdx = lines.findIndex((l) => l.replace(/[#*_`]/g, "").trim() === result.title);
+    if (titleIdx >= 0) {
+      for (let i = titleIdx + 1; i < lines.length; i++) {
+        const l = lines[i].replace(/[*_`]/g, "").trim();
+        if (l.length >= 5 && l.length <= 150 && l !== result.title && !l.startsWith(result.reference || "_")) {
+          result.subtitle = l;
+          break;
+        }
+      }
+    }
+  }
+
+  // Validação minima
+  if (!result.title || !result.verse || !result.reference) {
+    return null;
+  }
+  return result;
+}
