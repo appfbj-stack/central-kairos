@@ -46,6 +46,25 @@ enum PeriodType {
   MONTHLY
 }
 
+// Categoria do lembrete (Sprint v0.6.0+)
+enum ReminderType {
+  MEETING   // reunião, compromisso
+  BIRTHDAY  // aniversário
+  TASK      // tarefa, afazer
+  OTHER
+}
+
+// Categoria comum de gasto (Sprint v0.6.0+)
+enum ExpenseCategory {
+  FOOD          // comida, mercado, restaurante
+  CLOTHING      // roupa, calçado
+  TRANSPORT     // uber, gasolina, passagem
+  HEALTH        // farmácia, médico
+  HOUSING       // aluguel, conta
+  ENTERTAINMENT // lazer, streaming
+  OTHER
+}
+
 // ============================================================
 // ADMIN USER (você — único super admin da Central)
 // ============================================================
@@ -189,10 +208,54 @@ model Client {
   sessions      ClientSession[]
   otpCodes      OtpCode[]
   tasks         Task[]
+  reminders     Reminder[]
+  expenses      Expense[]
 
   @@index([status])
   @@index([email])
   @@index([plan])
+}
+
+// ============================================================
+// LEMBRETE (Sprint v0.6.0+)
+// Cliente agenda compromissos, tarefas, aniversarios. Mostrados no chat
+// quando chega a data (ou no "/agenda" do dia).
+// ============================================================
+
+model Reminder {
+  id        String       @id @default(cuid())
+  clientId  String
+  when      DateTime     // quando deve lembrar
+  message   String       // texto do lembrete
+  type      ReminderType @default(MEETING)
+  sent      Boolean      @default(false) // ja foi exibido/enviado?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, when])
+  @@index([sent, when])
+}
+
+// ============================================================
+// GASTO (Sprint v0.6.0+)
+// Cliente fala "comprei cafe 30" e Kairós soma pra resposta "quanto gastei".
+// ============================================================
+
+model Expense {
+  id          String          @id @default(cuid())
+  clientId    String
+  amount      Float           // em reais (BRL)
+  description String          // ex: "cafe", "camisa polo"
+  category    ExpenseCategory @default(OTHER)
+  occurredAt  DateTime        @default(now()) // quando aconteceu a compra
+  createdAt   DateTime        @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, occurredAt])
+  @@index([clientId, category])
 }
 
 model ClientSession {

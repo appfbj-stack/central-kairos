@@ -1,9 +1,12 @@
 // Conversas PWA (Etapa 3b) + chat com streaming SSE.
+// Aceita attachments (imagens inline em data URL base64) pra LLM multimodal.
+// Detecta intencoes (lembretes, gastos, consultas) via regex antes de chamar a LLM.
 import { Router, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { clientAuthMiddleware, ClientAuthRequest } from "../middleware/auth-pwa";
 import { streamChat, isClientBlocked } from "../lib/llm";
+import { detectIntents, type DetectedIntent } from "../lib/intent.js";
 
 const router = Router();
 router.use(clientAuthMiddleware);
@@ -141,6 +144,58 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
 
   // Envia um evento inicial com id da msg do user.
   res.write(`event: user-msg\ndata: ${JSON.stringify({ id: userMsg.id })}\n\n`);
+
+  // ---- Detecta intencoes (lembretes, gastos, consultas) ----
+  // Roda ANTES da LLM. Persiste no DB. Emite evento SSE `intent-result` com
+  // os dados pra UI mostrar cards. A LLM depois recebe o historico e responde
+  // de forma natural.
+  const intents = detectIntents(content);
+  const intentResults: any[] = [];
+  for (const it of intents) {
+    try {
+      if (it.type === "create_expense") {
+        const created = await prisma.expense.create({
+          data: {
+            clientId: client.id,
+            amount: it.amount,
+            description: it.description,
+            category: it.category,
+            occurredAt: it.occurredAt,
+          },
+        });
+        intentResults.push({ kind: "expense_created", expense: created });
+      } else if (it.type === "create_reminder") {
+        const created = await prisma.reminder.create({
+          data: {
+            clientId: client.id,
+            when: it.when,
+            message: it.message,
+            type: it.reminderType,
+          },
+        });
+        intentResults.push({ kind: "reminder_created", reminder: created });
+      } else if (it.type === "query_expenses") {
+        const list = await prisma.expense.findMany({
+          where: { clientId: client.id, occurredAt: { gte: it.from, lte: it.to } },
+          orderBy: { occurredAt: "desc" },
+          take: 100,
+        });
+        const total = list.reduce((acc, e) => acc + e.amount, 0);
+        intentResults.push({ kind: "expense_summary", total, count: list.length, expenses: list.slice(0, 10) });
+      } else if (it.type === "list_reminders") {
+        const list = await prisma.reminder.findMany({
+          where: { clientId: client.id, when: { gte: it.from, lte: it.to } },
+          orderBy: { when: "asc" },
+        });
+        intentResults.push({ kind: "reminder_list", reminders: list });
+      }
+    } catch (e: any) {
+      console.error("[intent] erro:", e);
+    }
+  }
+  if (intentResults.length > 0) {
+    res.write(`event: intent-result\ndata: ${JSON.stringify({ results: intentResults })}\n\n`);
+  }
 
   // Cria placeholder da msg do assistant.
   const assistantMsg = await prisma.message.create({

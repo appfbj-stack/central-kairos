@@ -13,6 +13,8 @@ import pwaConversationsRoutes from "./routes/pwa-conversations";
 import pwaDevicesRoutes from "./routes/pwa-devices";
 import pwaTasksRoutes from "./routes/pwa-tasks";
 import pwaBannerRoutes from "./routes/pwa-banner";
+import pwaRemindersRoutes from "./routes/pwa-reminders";
+import pwaExpensesRoutes from "./routes/pwa-expenses";
 import agentRoutes from "./routes/agent";
 import adminPwaRoutes from "./routes/admin-pwa";
 
@@ -57,6 +59,8 @@ app.use("/api/pwa/conversations", pwaConversationsRoutes);
 app.use("/api/pwa/devices", pwaDevicesRoutes);
 app.use("/api/pwa/tasks", pwaTasksRoutes);
 app.use("/api/pwa/banner", pwaBannerRoutes);
+app.use("/api/pwa/reminders", pwaRemindersRoutes);
+app.use("/api/pwa/expenses", pwaExpensesRoutes);
 app.use("/api/agent", agentRoutes);
 app.use("/api/admin-pwa", adminPwaRoutes);
 
