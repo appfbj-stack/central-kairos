@@ -131,11 +131,14 @@ REGRAS RIGOROSAS:
     }
 
     // Tenta 2: parser de texto livre
-    if (!parsed) {
-      parsed = parseFreeformBanner(cleaned);
+    if (!parsed || (typeof parsed === "object" && !parsed.title && !parsed.verse)) {
+      const freeform = parseFreeformBanner(cleaned);
+      if (freeform && freeform.title && freeform.verse) {
+        parsed = freeform;
+      }
     }
 
-    if (!parsed) {
+    if (!parsed || !parsed.title || !parsed.verse) {
       console.error("[pwa-banner/compose] LLM nao retornou JSON nem texto reconhecivel:", cleaned.slice(0, 500));
       // Fallback: escolhe versículo default baseado em keyword do tema
       parsed = fallbackBanner(topic);
