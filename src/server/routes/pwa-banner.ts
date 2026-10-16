@@ -113,6 +113,8 @@ REGRAS:
       [{ role: "user", content: `Tema do banner: ${topic}${brand ? `\nMarca/igreja: ${brand}` : ""}` }],
       (delta) => { acc += delta; },
     );
+    // Filtra blocos <think>...</think> do MiniMax (chain-of-thought)
+    acc = acc.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trimStart();
     // Limpa code fences caso a LLM retorne
     acc = acc.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
     // Pega o primeiro objeto {...} da resposta
