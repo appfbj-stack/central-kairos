@@ -38,6 +38,14 @@ enum Plan {
   ENTERPRISE
 }
 
+// Tipo de reset do contador de mensagens (Sprint v0.5.0+)
+// DAILY: reseta todo dia (free trial) — usado no Kairós PWA / Igreja
+// MONTHLY: reseta a cada 30 dias
+enum PeriodType {
+  DAILY
+  MONTHLY
+}
+
 // ============================================================
 // ADMIN USER (você — único super admin da Central)
 // ============================================================
@@ -168,6 +176,14 @@ model Client {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
+  // Plano de assinatura (Sprint v0.5.0+) — exibe no header do chat PWA
+  plan          Plan       @default(FREE) // FREE/BASIC/PRO/ULTRA/ENTERPRISE
+  usageLimit    Int        @default(10) // limite de mensagens no período (FREE=10/dia)
+  usageUsed     Int        @default(0) // mensagens já consumidas no período
+  periodType    PeriodType @default(DAILY) // DAILY (free) ou MONTHLY (pagos)
+  outputTokenCap Int       @default(500) // max tokens na resposta da LLM
+  lastUsageReset DateTime? // ultimo reset de usageUsed (pra DAILY)
+
   devices       Device[]
   conversations Conversation[]
   sessions      ClientSession[]
@@ -176,6 +192,7 @@ model Client {
 
   @@index([status])
   @@index([email])
+  @@index([plan])
 }
 
 model ClientSession {

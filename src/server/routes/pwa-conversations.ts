@@ -84,11 +84,34 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
   });
   if (!conv) return res.status(404).json({ error: "Conversa nao encontrada" });
 
-  // Verifica limite de tokens.
+  // Verifica cliente e checa limite de MENSAGENS (nao tokens).
+  // Auto-reset DAILY: se passou 1 dia desde lastUsageReset, zera usageUsed.
   const client = await prisma.client.findUnique({ where: { id: req.client!.clientId } });
   if (!client) return res.status(404).json({ error: "Cliente nao encontrado" });
+
+  // Auto-reset DAILY
+  if (client.periodType === "DAILY" && client.lastUsageReset) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (Date.now() - client.lastUsageReset.getTime() >= dayMs) {
+      await prisma.client.update({
+        where: { id: client.id },
+        data: { usageUsed: 0, lastUsageReset: new Date() },
+      });
+      client.usageUsed = 0;
+    }
+  }
+
+  // Checagem de status (BLOCKED/EXPIRED/trial) via helper
   const guard = isClientBlocked(client, 0);
   if (!guard.ok) return res.status(403).json({ error: guard.reason });
+
+  // Checagem de limite de MENSAGENS do plano
+  if (client.usageUsed >= client.usageLimit) {
+    const periodLabel = client.periodType === "DAILY" ? "do dia" : "do mes";
+    return res.status(403).json({
+      error: `Limite de mensagens do plano ${client.plan} atingido (${client.usageUsed}/${client.usageLimit}) ${periodLabel}`,
+    });
+  }
 
   // Salva a msg do usuario (com attachments em JSON).
   const userMsg = await prisma.message.create({
@@ -161,7 +184,7 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
       },
     );
 
-    // Atualiza msg final + tokens do cliente.
+    // Atualiza msg final + incrementa uso do cliente.
     await prisma.$transaction([
       prisma.message.update({
         where: { id: assistantMsg.id },
@@ -169,7 +192,12 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
       }),
       prisma.client.update({
         where: { id: client.id },
-        data: { tokensUsed: { increment: result.tokensIn + result.tokensOut } },
+        data: {
+          // Incrementa contador de MENSAGENS (uma msg do user = +1)
+          usageUsed: { increment: 1 },
+          // Mantem tokens para billing futuro
+          tokensUsed: { increment: result.tokensIn + result.tokensOut },
+        },
       }),
       prisma.conversation.update({ where: { id: conv.id }, data: { updatedAt: new Date() } }),
     ]);
@@ -179,7 +207,10 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
         text: visibleText,
         tokensIn: result.tokensIn,
         tokensOut: result.tokensOut,
-        remaining: client.tokensLimit - (client.tokensUsed + result.tokensIn + result.tokensOut),
+        remaining: client.usageLimit - (client.usageUsed + 1),
+        plan: client.plan,
+        usageUsed: client.usageUsed + 1,
+        usageLimit: client.usageLimit,
       })}\n\n`,
     );
   } catch (err: any) {

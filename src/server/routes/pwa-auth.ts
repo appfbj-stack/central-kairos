@@ -57,6 +57,13 @@ router.post("/register", async (req, res) => {
       trialStartAt: now,
       trialEndsAt,
       tokensLimit: 50000,
+      // Plano padrão: FREE com 10 msgs/dia (limite generoso de trial)
+      plan: "FREE",
+      usageLimit: 10,
+      usageUsed: 0,
+      periodType: "DAILY",
+      outputTokenCap: 500,
+      lastUsageReset: now,
     },
   });
 
@@ -82,6 +89,11 @@ router.post("/register", async (req, res) => {
       name: client.name,
       status: client.status,
       trialEndsAt: client.trialEndsAt,
+      plan: client.plan,
+      usageLimit: client.usageLimit,
+      usageUsed: client.usageUsed,
+      periodType: client.periodType,
+      outputTokenCap: client.outputTokenCap,
       tokensLimit: client.tokensLimit,
       tokensUsed: client.tokensUsed,
     },
@@ -193,8 +205,8 @@ router.get("/me", clientAuthMiddleware, async (req: ClientAuthRequest, res) => {
     select: {
       id: true, email: true, name: true, status: true,
       trialEndsAt: true,
-      // Token cap (novo) — exibido no header do chat
-      plan: true, usageLimit: true, usageUsed: true, periodType: true, outputTokenCap: true,
+      // Plano + mensagens (Sprint v0.5.0+)
+      plan: true, usageLimit: true, usageUsed: true, periodType: true, outputTokenCap: true, lastUsageReset: true,
       currentPeriodEnd: true,
       // Tokens (legado, mantido pra back-compat)
       tokensLimit: true, tokensUsed: true,
@@ -202,7 +214,31 @@ router.get("/me", clientAuthMiddleware, async (req: ClientAuthRequest, res) => {
     },
   });
   if (!client) return res.status(404).json({ error: "Cliente nao encontrado" });
-  res.json({ client });
+
+  // Reset automático DAILY: se passou 1 dia desde lastUsageReset, zera usageUsed
+  let { usageUsed, lastUsageReset, periodType, usageLimit } = client;
+  if (periodType === "DAILY" && lastUsageReset) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const elapsed = Date.now() - lastUsageReset.getTime();
+    if (elapsed >= dayMs) {
+      const zero = await prisma.client.update({
+        where: { id: client.id },
+        data: { usageUsed: 0, lastUsageReset: new Date() },
+        select: { usageUsed: true, lastUsageReset: true },
+      });
+      usageUsed = zero.usageUsed;
+      lastUsageReset = zero.lastUsageReset;
+    }
+  }
+
+  res.json({
+    client: {
+      ...client,
+      usageUsed,
+      lastUsageReset,
+      usageLimit,
+    },
+  });
 });
 
 // ---------- PASSWORD RESET: REQUEST ----------
