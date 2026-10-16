@@ -18,7 +18,9 @@ export interface TextBlock {
 export interface BannerOptions {
   /** Imagem base (Buffer, path, ou URL). Se omitido, gera gradiente. */
   base?: Buffer | string;
+  /** Largura final (px). Default 800 (compacto pra celular). */
   width?: number;
+  /** Altura final (px). Default 1000 (compacto pra celular). */
   height?: number;
   title?: string;
   subtitle?: string;
@@ -26,6 +28,8 @@ export interface BannerOptions {
   brand?: string;
   /** Paleta do gradiente (caso nao tenha base) */
   gradient?: [string, string];
+  /** Qualidade do PNG (1-100). Default 80. */
+  quality?: number;
 }
 
 function wrapText(text: string, maxChars: number): string[] {
@@ -127,8 +131,9 @@ function makeGradient(width: number, height: number, c1: string, c2: string): Pr
 }
 
 export async function composeBanner(opts: BannerOptions): Promise<{ buf: Buffer; width: number; height: number }> {
-  const width = opts.width ?? 1080;
-  const height = opts.height ?? 1350;
+  const width = opts.width ?? 800;
+  const height = opts.height ?? 1000;
+  const quality = opts.quality ?? 80;
   const texts: TextBlock[] = [];
 
   if (opts.title) {
@@ -183,7 +188,7 @@ export async function composeBanner(opts: BannerOptions): Promise<{ buf: Buffer;
   const textSvg = buildTextSvg(width, height, texts);
   const buf = await sharp(baseBuffer)
     .composite([{ input: Buffer.from(textSvg), top: 0, left: 0 }])
-    .png({ quality: 95 })
+    .png({ quality })
     .toBuffer();
 
   return { buf, width, height };

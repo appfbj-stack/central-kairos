@@ -208,10 +208,13 @@ function parseFreeformBanner(text: string): {
   for (const l of lines) {
     if (/^#+\s*/.test(l)) {
       const t = l.replace(/^#+\s*/, "").replace(/[*_`]/g, "").trim();
-      if (t.length >= 3 && t.length <= 60) { result.title = t; break; }
+      // Limpa prefixos indesejados tipo "Banner: ", "Banner — ", "Title: "
+      const cleaned = t.replace(/^banner\s*[:\-—|]\s*/i, "").replace(/^titulo\s*[:\-—|]\s*/i, "").trim();
+      if (cleaned.length >= 3 && cleaned.length <= 60) { result.title = cleaned; break; }
     }
     if (l === l.toUpperCase() && l.length >= 3 && l.length <= 60 && /[A-ZÁÉÍÓÚÂÊÔÇ]/.test(l)) {
-      result.title = l.replace(/[*_`]/g, "").trim();
+      const cleaned = l.replace(/[*_`]/g, "").replace(/^banner\s*[:\-—|]\s*/i, "").replace(/^titulo\s*[:\-—|]\s*/i, "").trim();
+      result.title = cleaned;
       break;
     }
   }
@@ -221,7 +224,12 @@ function parseFreeformBanner(text: string): {
     const titleIdx = lines.findIndex((l) => l.replace(/[#*_`]/g, "").trim() === result.title);
     if (titleIdx >= 0) {
       for (let i = titleIdx + 1; i < lines.length; i++) {
-        const l = lines[i].replace(/[*_`]/g, "").trim();
+        const l = lines[i].replace(/[#*_`]/g, "").trim()
+          // Limpa prefixo "Subtitle: " etc
+          .replace(/^subtitulo\s*[:\-—|]\s*/i, "").replace(/^subtitle\s*[:\-—|]\s*/i, "")
+          // Limpa prefixo "Sujestao/Sugestao" que a LLM gosta de botar
+          .replace(/^suge(?:r|sta|ren)(?:stoes|tao|coes)?\s*(?:de\s+)?(?:vers[ií]culos?|frases?)?\s*[:\-—|]?\s*/i, "")
+          .trim();
         if (l.length >= 5 && l.length <= 150 && l !== result.title && !l.startsWith(result.reference || "_")) {
           result.subtitle = l;
           break;
