@@ -14,6 +14,8 @@ services:
       - dokploy-network
     ports:
       - "127.0.0.1:4001:3000"
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
       - PORT=3000
