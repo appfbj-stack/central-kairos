@@ -221,12 +221,15 @@ function parseFreeformBanner(text: string): {
       .replace(/^#+\s*/, "")
       .replace(/[*_`]/g, "")
       .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]\s*/u, "") // tira emoji
-      .replace(/^banner\s*[:\-—|]\s*/i, "")
-      .replace(/^conceito\s+de\s+banner\s*[:\-—|]?\s*/i, "")
-      .replace(/^titulo\s*[:\-—|]\s*/i, "")
-      .replace(/\s*\((kair[oó]s|kairos)\)\s*$/i, "") // tira (Kairos) no final
-      .replace(/\s*\|\s*kair[oó]s\s*$/i, "") // tira | Kairos
-      .replace(/\s*[-—]\s*kair[oó]s\s*$/i, "") // tira - Kairos
+      // Remove prefixos comuns (case-insensitive)
+      .replace(/^(banner|conceito\s+de\s+banner|titulo|t[ií]tulo|design|modelo)\s*[:\-—|]?\s*/i, "")
+      .replace(/^\(?kair[oó]s\)?\s*[:\-—|]\s*/i, "") // "(Kairos) — " no comeco
+      .replace(/^kair[oó]s\s+/i, "") // "Kairos " no comeco
+      // Limpa sufixos
+      .replace(/\s*\((kair[oó]s|kairos)\)\s*$/i, "")
+      .replace(/\s*\|\s*kair[oó]s\s*$/i, "")
+      .replace(/\s*[-—]\s*kair[oó]s\s*$/i, "")
+      .replace(/\s*[-—|]\s*$/i, "") // trailing " -" ou " |"
       .trim();
 
   // 3a) Procura "**Titulo:** X" (markdown bold)
@@ -290,7 +293,16 @@ function parseFreeformBanner(text: string): {
 
   // 5) Se titulo vier vazio depois de limpar, descarta
   if (result.title && result.title.length < 3) delete result.title;
-  if (result.subtitle && result.subtitle.length < 5) delete result.subtitle;
+  if (result.subtitle) {
+    // Rejeita placeholders conhecidos
+    if (/^vers[ií]culo\s+sugerido$/i.test(result.subtitle)
+        || /^subt[ií]tulo\s*[:\-—]?\s*$/i.test(result.subtitle)
+        || /^suge(?:r|sta|ren|rir)/i.test(result.subtitle)) {
+      delete result.subtitle;
+    } else if (result.subtitle.length < 5) {
+      delete result.subtitle;
+    }
+  }
 
   // Validação minima
   if (!result.title || !result.verse || !result.reference) {
