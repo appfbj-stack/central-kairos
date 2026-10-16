@@ -32,7 +32,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "50mb" })); // 50MB: suporta ate 4 imagens de 10MB (PWA multimodal) + JSON
 app.use(cookieParser());
 
 // Health check
