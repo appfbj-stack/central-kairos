@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import bcrypt from "bcryptjs";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 import { prisma } from "./lib/prisma";
 import authRoutes from "./routes/auth";
 import installationsRoutes from "./routes/installations";
@@ -40,10 +42,16 @@ app.use(cookieParser());
 
 // Health check
 app.get("/api/health", (_req, res) => {
+  // Le versao do package.json (atualizada em cada build)
+  let version = "0.0.0";
+  try {
+    const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
+    version = pkg.version;
+  } catch {}
   res.json({
     status: "ok",
     app: "Central Kairos",
-    version: "0.1.0",
+    version,
     ts: new Date().toISOString(),
   });
 });
