@@ -5,6 +5,7 @@
 
 services:
   app:
+    image: central-kairos:0.5.1
     build:
       context: .
       dockerfile: Dockerfile

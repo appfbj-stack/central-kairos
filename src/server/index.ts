@@ -69,6 +69,7 @@ app.use("/api/pwa/tasks", pwaTasksRoutes);
 app.use("/api/pwa/banner", pwaBannerRoutes);
 app.use("/api/pwa/reminders", pwaRemindersRoutes);
 app.use("/api/pwa/expenses", pwaExpensesRoutes);
+app.use("/api/pwa/pdf", pwaPdfRoutes);
 app.use("/api/agent", agentRoutes);
 app.use("/api/admin-pwa", adminPwaRoutes);
 
