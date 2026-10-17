@@ -12,10 +12,14 @@ const pdfParseFn: ((buf: Buffer) => Promise<any>) | null = typeof pdfParseModule
 
 async function parsePdf(buffer: Buffer): Promise<{ text: string; numpages: number; info: any }> {
   if (PDFParseClass) {
-    // v2: new PDFParse({data}).parse() retorna {text, numpages, info, ...}
+    // v2 (pdfjs-dist wrapped): new PDFParse({data}).load() -> getText()/getInfo()
     const parser = new PDFParseClass({ data: buffer });
-    const result = await parser.parse();
-    return { text: result.text ?? "", numpages: result.numpages ?? 0, info: result.info ?? null };
+    if (typeof parser.load === "function") {
+      await parser.load();
+    }
+    const text = typeof parser.getText === "function" ? await parser.getText() : "";
+    const info = typeof parser.getInfo === "function" ? await parser.getInfo() : null;
+    return { text: text ?? "", numpages: info?.numPages ?? 0, info: info ?? null };
   }
   if (pdfParseFn) {
     // v1: pdfParse(buffer) retorna {text, numpages, info}
