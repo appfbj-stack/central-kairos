@@ -63,13 +63,13 @@ router.delete("/:id", async (req: ClientAuthRequest, res: Response) => {
 // Aceita attachments (imagens inline em data URL base64) pra LLM multimodal.
 const AttachmentSchema = z.object({
   name: z.string().min(1).max(200),
-  mime: z.string().regex(/^image\/(png|jpe?g|webp|gif)$/i),
-  size: z.number().int().min(1).max(10 * 1024 * 1024), // 10MB por imagem
-  dataUrl: z.string().min(1).max(20 * 1024 * 1024), // data URL base64 (sobe ~33% sobre binario)
+  mime: z.string().regex(/^(image\/(png|jpe?g|webp|gif)|application\/pdf)$/i),
+  size: z.number().int().min(1).max(20 * 1024 * 1024), // 20MB (PDF ou imagem)
+  dataUrl: z.string().min(1).max(30 * 1024 * 1024), // data URL base64
 });
 
 const MsgSchema = z.object({
-  content: z.string().min(1).max(8000),
+  content: z.string().min(0).max(16000), // permite vazio se tiver attachment
   attachments: z.array(AttachmentSchema).max(4).optional(),
 });
 
