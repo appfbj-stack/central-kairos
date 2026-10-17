@@ -17,9 +17,20 @@ async function parsePdf(buffer: Buffer): Promise<{ text: string; numpages: numbe
     if (typeof parser.load === "function") {
       await parser.load();
     }
-    const text = typeof parser.getText === "function" ? await parser.getText() : "";
+    const textResult = typeof parser.getText === "function" ? await parser.getText() : null;
     const info = typeof parser.getInfo === "function" ? await parser.getInfo() : null;
-    return { text: text ?? "", numpages: info?.numPages ?? 0, info: info ?? null };
+    // getText() pode retornar string OU {text, pages, total}. Normalizar.
+    let text = "";
+    let numpages = 0;
+    if (typeof textResult === "string") {
+      text = textResult;
+    } else if (textResult && typeof textResult === "object") {
+      text = textResult.text ?? "";
+      numpages = textResult.total ?? 0;
+    }
+    if (numpages === 0 && info?.info?.NumPages) numpages = info.info.NumPages;
+    if (numpages === 0 && info?.total) numpages = info.total;
+    return { text, numpages, info: info?.info ?? info ?? null };
   }
   if (pdfParseFn) {
     // v1: pdfParse(buffer) retorna {text, numpages, info}
