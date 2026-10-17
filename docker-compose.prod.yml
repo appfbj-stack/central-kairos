@@ -21,7 +21,6 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://postgres:postgres123@kairos-shared-pg:5432/central_kairos?schema=public
-      - JWT_SECRET=${JWT_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@central-kairos.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Troque@Senha123}
       - ADMIN_NAME=${ADMIN_NAME:-Fernando Borges}
