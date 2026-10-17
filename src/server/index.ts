@@ -17,6 +17,7 @@ import pwaTasksRoutes from "./routes/pwa-tasks";
 import pwaBannerRoutes from "./routes/pwa-banner";
 import pwaRemindersRoutes from "./routes/pwa-reminders";
 import pwaExpensesRoutes from "./routes/pwa-expenses";
+import pwaPdfRoutes from "./routes/pwa-pdf";
 import agentRoutes from "./routes/agent";
 import adminPwaRoutes from "./routes/admin-pwa";
 
