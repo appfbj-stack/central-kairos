@@ -17,7 +17,8 @@ export type DetectedIntent =
     }
   | { type: "create_expense"; amount: number; description: string; category: ExpenseCategory; occurredAt: Date }
   | { type: "query_expenses"; from: Date; to: Date }
-  | { type: "list_reminders"; from: Date; to: Date };
+  | { type: "list_reminders"; from: Date; to: Date }
+  | { type: "create_banner"; topic: string; brand?: string; format: "post" | "reel" };
 
 // --- helpers de data em PT-BR ---
 
@@ -190,6 +191,33 @@ export function detectIntents(text: string): DetectedIntent[] {
     const from = new Date(); from.setHours(0,0,0,0);
     const to = new Date(); to.setDate(to.getDate() + 30); to.setHours(23,59,59,999);
     intents.push({ type: "list_reminders", from, to });
+  }
+
+  // ---- 5. CRIAR BANNER / IMAGEM ----
+  // Detecta: "cria um banner sobre paz", "faz uma imagem do retiro", "gera um carrossel de..."
+  // Ou: "banner sobre coragem", "carrossel do retiro de jovens"
+  // Formato: detecta "reel", "stories", "vertical" => 9:16; senão "post"/"feed"/"quadrado" => 4:5
+  const bannerVerb = /\b(cria|criar|faz|fazer|gera|gerar|monta|montar|me\s+(faz|faz|cria)|preciso\s+de)\s+(um\s+|uma\s+|mais\s+)?(banner|carrossel|post|imagem|figura|arte|slide|reel|stories|story|video|cover|capa)/i;
+  const bannerNoun = /\b(banner|carrossel|reel|stories|story|cover|capa)\s+(sobre|de|do|da|com|para|pro)\b/i;
+  if (bannerVerb.test(t) || bannerNoun.test(t)) {
+    // detecta formato (reel/stories/vertical => 9:16; senao post/feed => 4:5)
+    const format: "post" | "reel" = /\b(reel|reels|storie?s|story|vertical|9[\s\-\/:]?16|1080\s*x\s*1920)\b/i.test(t) ? "reel" : "post";
+    // extrai o "topic" — tudo que vem depois do gatilho, limpando verbos auxiliares
+    let topic = t;
+    // remove frase inicial comum
+    topic = topic.replace(/^(por\s+favor|pfv|favor|me\s+|te\s+pe[çc]o|preciso\s+que\s+voc[êe]|pode\s+fazer\s+um|voc[êe]\s+(consegue|pode)\s+fazer\s+um)\s*[:,-]?\s*/i, "");
+    // remove verbos de comando
+    topic = topic.replace(/^(cria|criar|faz|fazer|gera|gerar|monta|montar)\s+(um\s+|uma\s+|mais\s+)?(banner|carrossel|post|imagem|figura|arte|slide|reel|stories|story|video|cover|capa)\s*(sobre|de|do|da|com|para|pro)?\s*/i, "");
+    // remove preposição inicial
+    topic = topic.replace(/^(sobre|de|do|da|com|para|pro)\s+/i, "");
+    // remove keywords de formato
+    topic = topic.replace(/\b(reel|reels|storie?s|story|vertical|9[\s\-\/:]?16|1080\s*x\s*1920|post|feed|4[\s\-\/:]?5|1080\s*x\s*1350)\b/gi, "");
+    // remove marcadores
+    topic = topic.replace(/\b(por\s+favor|pfv|hoje|agora)\b/gi, "");
+    topic = topic.replace(/\s+/g, " ").trim();
+    // se topic vazio ou só stopword, usa um genérico
+    if (!topic || topic.length < 2) topic = "uma palavra de encorajamento";
+    intents.push({ type: "create_banner", topic, format });
   }
 
   return intents;

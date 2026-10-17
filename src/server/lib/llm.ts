@@ -23,6 +23,18 @@ export interface StreamResult {
   tokensOut: number;
 }
 
+export interface ChatOnceOptions {
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
+export interface ChatOnceResult {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 const DEFAULT_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
@@ -120,6 +132,49 @@ export async function streamChat(
 
   if (!tokensOut) tokensOut = Math.ceil(full.length / 4);
   return { text: full, tokensIn, tokensOut };
+}
+
+/**
+ * Chat não-streaming: chama a LLM e retorna o texto completo de uma vez.
+ * Útil para geração de conteúdo curto (banner, resumo, etc) onde não precisa de SSE.
+ * Retorna { text, tokensIn, tokensOut }.
+ */
+export async function chatOnce(
+  messages: ChatMessage[],
+  opts: ChatOnceOptions = {},
+): Promise<ChatOnceResult> {
+  const url = getEnv("LLM_API_URL", DEFAULT_URL);
+  const apiKey = getEnv("LLM_API_KEY", "");
+  const model = getEnv("LLM_MODEL", DEFAULT_MODEL);
+
+  const body: any = {
+    model,
+    stream: false,
+    temperature: opts.temperature ?? 0.7,
+    messages: [{ role: "system" as const, content: SYSTEM_PROMPT }, ...messages],
+  };
+  if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`LLM HTTP ${resp.status}: ${txt.slice(0, 300)}`);
+  }
+
+  const json = await resp.json();
+  const text = json.choices?.[0]?.message?.content ?? "";
+  const tokensIn = json.usage?.prompt_tokens ?? 0;
+  const tokensOut = json.usage?.completion_tokens ?? Math.ceil(text.length / 4);
+  return { text, tokensIn, tokensOut };
 }
 
 export function isClientBlocked(client: Client, extraTokens: number): { ok: boolean; reason?: string } {

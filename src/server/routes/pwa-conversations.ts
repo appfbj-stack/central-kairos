@@ -5,8 +5,9 @@ import { Router, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { clientAuthMiddleware, ClientAuthRequest } from "../middleware/auth-pwa";
-import { streamChat, isClientBlocked } from "../lib/llm";
+import { streamChat, isClientBlocked, chatOnce } from "../lib/llm";
 import { detectIntents, type DetectedIntent } from "../lib/intent.js";
+import { generateBannerFromTopic } from "../lib/banner.js";
 
 const router = Router();
 router.use(clientAuthMiddleware);
@@ -188,6 +189,34 @@ router.post("/:id/messages", async (req: ClientAuthRequest, res: Response) => {
           orderBy: { when: "asc" },
         });
         intentResults.push({ kind: "reminder_list", reminders: list });
+      } else if (it.type === "create_banner") {
+        // Gera banner server-side via LLM (com fallback) e emite dataUrl pro cliente
+        try {
+          const { content, buf, width, height, format } = await generateBannerFromTopic(
+            it.topic,
+            it.brand,
+            async (messages) => {
+              const r = await chatOnce(messages, { maxTokens: 300, temperature: 0.7 });
+              return r.text;
+            },
+            it.format
+          );
+          const dataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+          intentResults.push({
+            kind: "banner_created",
+            topic: it.topic,
+            title: content.title,
+            subtitle: content.subtitle,
+            verse: content.verse,
+            dataUrl,
+            width,
+            height,
+            format,
+          });
+        } catch (e: any) {
+          console.error("[banner] erro ao gerar:", e);
+          intentResults.push({ kind: "banner_error", topic: it.topic, error: e?.message });
+        }
       }
     } catch (e: any) {
       console.error("[intent] erro:", e);

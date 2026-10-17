@@ -24,7 +24,14 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache openssl libc6-compat curl tini
+# Fontes Noto (Serif/Sans completo) + fontconfig + Liberation/DejaVu fallback
+# Pra banner PNG sair com texto nitido em portugues (acentos, etc)
+RUN apk add --no-cache openssl libc6-compat curl tini \
+    fontconfig \
+    font-noto \
+    font-noto-cjk \
+    ttf-dejavu \
+    ttf-liberation
 
 COPY package.json package-lock.json* ./
 COPY --from=builder /app/node_modules ./node_modules
