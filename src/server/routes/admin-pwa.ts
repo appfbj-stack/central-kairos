@@ -18,6 +18,12 @@ router.get("/clients", async (_req: AuthRequest, res: Response) => {
         email: true,
         name: true,
         status: true,
+        plan: true,
+        usageLimit: true,
+        usageUsed: true,
+        periodType: true,
+        outputTokenCap: true,
+        lastUsageReset: true,
         trialStartAt: true,
         trialEndsAt: true,
         tokensLimit: true,
@@ -92,6 +98,34 @@ router.post("/clients/:id/reset-tokens", async (req: AuthRequest, res: Response)
     data: { tokensUsed: 0 },
   });
   res.json({ client: c });
+});
+
+// POST /api/admin-pwa/clients/:id/set-plan - muda plano + limites do cliente
+// Body: { plan?: "FREE"|"BASIC"|"PRO"|"ULTRA", usageLimit?: number, periodType?: "DAILY"|"MONTHLY", outputTokenCap?: number, resetUsage?: bool }
+// Dica: para deixar SEM limite, use { plan: "ULTRA", usageLimit: 999999, periodType: "MONTHLY" }
+router.post("/clients/:id/set-plan", async (req: AuthRequest, res: Response) => {
+  const { plan, usageLimit, periodType, outputTokenCap, resetUsage } = req.body || {};
+  const data: any = {};
+  if (plan && ["FREE", "BASIC", "PRO", "ULTRA"].includes(plan)) data.plan = plan;
+  if (typeof usageLimit === "number" && usageLimit >= 0) data.usageLimit = Math.floor(usageLimit);
+  if (periodType && ["DAILY", "MONTHLY"].includes(periodType)) data.periodType = periodType;
+  if (typeof outputTokenCap === "number" && outputTokenCap >= 0) data.outputTokenCap = Math.floor(outputTokenCap);
+  if (resetUsage === true) {
+    data.usageUsed = 0;
+    data.lastUsageReset = new Date();
+  }
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: "Nenhum campo pra atualizar. Envie plan/usageLimit/periodType/outputTokenCap/resetUsage." });
+  }
+  const c = await prisma.client.update({
+    where: { id: req.params.id },
+    data,
+    select: {
+      id: true, email: true, plan: true, usageLimit: true, usageUsed: true,
+      periodType: true, outputTokenCap: true, lastUsageReset: true,
+    },
+  });
+  res.json({ client: c, applied: data });
 });
 
 // DELETE /api/admin-pwa/clients/:id - remove client (cascade: devices/sessions/tasks/conversations)
